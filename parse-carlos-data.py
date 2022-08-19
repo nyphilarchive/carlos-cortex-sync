@@ -207,7 +207,7 @@ def sources(data):
 				existing_roles = artists[soloistID]['Role'].split('|')
 				if instrument not in existing_roles:
 					existing_roles.append(instrument)
-					print(existing_roles)
+					# print(existing_roles)
 				artists[soloistID]['Role'] = ('|').join(existing_roles)
 			i += 1
 
@@ -348,7 +348,7 @@ carlos_data = {}
 carlos_input = csv.DictReader(open(path, encoding='ISO-8859-1'))
 
 # get the list of Season folders
-season_file = csv.DictReader(open('cortex-seasons.csv'))
+season_file = csv.DictReader(open(directory+'cortex-seasons.csv'))
 seasons = []
 for row in season_file:
 	seasons.append(row['season'])
