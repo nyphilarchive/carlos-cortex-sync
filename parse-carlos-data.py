@@ -109,11 +109,11 @@ def make_folders(data):
 				
 			folders.append(folder)
 
-	with open(directory+'cortex_folder_names.json', 'w', encoding='UTF-8') as jsonfile:
-		jsonfile.write(json.dumps(folders, indent=4))
+	# with open(directory+'cortex_folder_names.json', 'w', encoding='UTF-8') as jsonfile:
+	# 	jsonfile.write(json.dumps(folders, indent=4))
 
 	fieldnames = folders[1].keys()
-	with open(directory+'cortex_folder_names.csv', 'w', newline='', encoding='UTF-8') as csvfile:
+	with open(directory+'cortex/cortex_folder_names.csv', 'w', newline='', encoding='UTF-8') as csvfile:
 		writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
 		writer.writeheader()
 		for folder in folders:
@@ -228,21 +228,21 @@ def sources(data):
 			i += 1
 
 	# save as json
-	print('Writing Artist JSON file...')
-	with open(directory+'source_accounts_artists.json', 'w', encoding='UTF-8') as jsonfile:
-		jsonfile.write(json.dumps(artists, indent=4, sort_keys=True))
-	print('Done')
+	# print('Writing Artist JSON file...')
+	# with open(directory+'cortex/source_accounts_artists.json', 'w', encoding='UTF-8') as jsonfile:
+	# 	jsonfile.write(json.dumps(artists, indent=4, sort_keys=True))
+	# print('Done')
 
 	# save as json
-	print('Writing Composer JSON file...')
-	with open(directory+'source_accounts_composers.json', 'w', encoding='UTF-8') as jsonfile:
-		jsonfile.write(json.dumps(composers, indent=4, sort_keys=True))
-	print('Done')
+	# print('Writing Composer JSON file...')
+	# with open(directory+'cortex/source_accounts_composers.json', 'w', encoding='UTF-8') as jsonfile:
+	# 	jsonfile.write(json.dumps(composers, indent=4, sort_keys=True))
+	# print('Done')
 
 	# save as csv
 	print('Writing Artist CSV file...')
 	fieldnames = artists[47].keys()
-	with open(directory+'source_accounts_artists.csv', 'w', newline='', encoding='ISO-8859-1') as csvfile:
+	with open(directory+'cortex/source_accounts_artists.csv', 'w', newline='', encoding='ISO-8859-1') as csvfile:
 		writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
 		writer.writeheader()
 		for artist in artists:
@@ -252,7 +252,7 @@ def sources(data):
 	# save as csv
 	print('Writing Composer CSV file...')
 	fieldnames = composers[50387].keys()
-	with open(directory+'source_accounts_composers.csv', 'w', newline='', encoding='ISO-8859-1') as csvfile:
+	with open(directory+'cortex/source_accounts_composers.csv', 'w', newline='', encoding='ISO-8859-1') as csvfile:
 		writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
 		writer.writeheader()
 		for composer in composers:
@@ -292,7 +292,7 @@ def people(data, person_type):
 
 	# dump this list to CSV
 	print('Writing', person_type, 'to CSV...')
-	with open(directory+person_type+'.csv', 'w', encoding='ISO-8859-1') as f:
+	with open(directory+'cortex/'+person_type+'.csv', 'w', encoding='ISO-8859-1') as f:
 		csv_writer = csv.writer(f)
 		headers = ['Program ID', ID_header]
 		csv_writer.writerow(headers)
@@ -320,15 +320,15 @@ def program_data(data):
 			data[program].pop(col, None)
 
 	# save as json
-	print('Writing JSON file...')
-	with open(directory+'program_data_for_cortex.json', 'w', encoding='UTF-8') as jsonfile:
-		jsonfile.write(json.dumps(data, indent=4))
-	print('Done')
+	# print('Writing JSON file...')
+	# with open(directory+'cortex/program_data_for_cortex.json', 'w', encoding='UTF-8') as jsonfile:
+	# 	jsonfile.write(json.dumps(data, indent=4))
+	# print('Done')
 
 	# save as csv
 	print('Writing CSV file...')
 	fieldnames = data['2566'].keys()
-	with open(directory+'program_data_for_cortex.csv', 'w', newline='', encoding='ISO-8859-1') as csvfile:
+	with open(directory+'cortex/program_data_for_cortex.csv', 'w', newline='', encoding='ISO-8859-1') as csvfile:
 		writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
 		writer.writeheader()
 		for program in data:

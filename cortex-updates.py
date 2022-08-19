@@ -1,6 +1,8 @@
 # Cortex API calls for Carlos metadata updates
-# Used in conjunction with carlos2cortex.py which creates the CSVs
 # This script will read various CSVs and execute the appropriate API calls to create or update records
+# Make sure you have an .env file in this directory that looks like this:
+# login = 'yourlogin'
+# password = 'yourpassword'
 # by Bill Levay
 
 import requests, csv, sys, os
@@ -9,7 +11,7 @@ import xml.etree.ElementTree as ET
 from dotenv import load_dotenv
 
 # CONSTANTS
-directory = '/mnt/x/CARLOS/CSV/'
+directory = '/mnt/x/CARLOS/CSV/cortex/'
 baseurl = 'https://cortex.nyphil.org'
 datatable = '/API/DataTable/v2.2/'
 
