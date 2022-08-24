@@ -149,7 +149,7 @@ def sources(data):
 		# Start with conductors
 		i = 0
 		for conductor in data[program]['CONDUCTOR'].split('|'):
-			if conductor != '' and conductor not in artists:
+			if conductor != '' and int(conductor) not in artists:
 				artists[int(conductor)] = {
 					'Artist ID': conductor,
 					'Display Name': data[program]['CONDUCTOR_NAMES'].split('|')[i],
@@ -203,12 +203,18 @@ def sources(data):
 					'Orchestra': orchestra,
 					'Orchestra Years': orch_years,
 				}
-			elif soloistID in artists and instrument !='':
+
+			# if the person is already in the artist list, combine all roles
+			elif soloistID in artists:
+
+				# grab existing roles from the dict and turn into list
 				existing_roles = artists[soloistID]['Role'].split('|')
+
 				if instrument not in existing_roles:
 					existing_roles.append(instrument)
-					# print(existing_roles)
+
 				artists[soloistID]['Role'] = ('|').join(existing_roles)
+
 			i += 1
 
 		# Finally, loop through composers
@@ -224,6 +230,7 @@ def sources(data):
 					'Last Name': data[program]['COMPOSER_LAST_NAME'].split('|')[i],
 					'Birth Year': data[program]['COMPOSER_YEAR_OF_BIRTH'].split('|')[i],
 					'Death Year': data[program]['COMPOSER_YEAR_OF_DEATH'].split('|')[i],
+					'Role': 'Composer',
 				}
 			i += 1
 
@@ -241,7 +248,7 @@ def sources(data):
 
 	# save as csv
 	print('Writing Artist CSV file...')
-	fieldnames = artists[47].keys()
+	fieldnames = next(iter(artists.values())).keys()
 	with open(directory+'cortex/source_accounts_artists.csv', 'w', newline='', encoding='ISO-8859-1') as csvfile:
 		writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
 		writer.writeheader()
@@ -251,7 +258,7 @@ def sources(data):
 
 	# save as csv
 	print('Writing Composer CSV file...')
-	fieldnames = composers[50387].keys()
+	fieldnames = next(iter(composers.values())).keys()
 	with open(directory+'cortex/source_accounts_composers.csv', 'w', newline='', encoding='ISO-8859-1') as csvfile:
 		writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
 		writer.writeheader()
@@ -364,12 +371,12 @@ for row in carlos_input:
 ## create output files ##
 #########################
 
-make_folders(carlos_data)
+# make_folders(carlos_data)
 
 sources(carlos_data)
 
-people(carlos_data,'composers')
-people(carlos_data,'conductors')
-people(carlos_data,'soloists')
+# people(carlos_data,'composers')
+# people(carlos_data,'conductors')
+# people(carlos_data,'soloists')
 
-program_data(carlos_data)
+# program_data(carlos_data)
