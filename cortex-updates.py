@@ -1,8 +1,10 @@
 # Cortex API calls for Carlos metadata updates
 # This script will read various CSVs and execute the appropriate API calls to create or update records
+#
 # Make sure you have an .env file in this directory that looks like this:
 # login = 'yourlogin'
 # password = 'yourpassword'
+#
 # by Bill Levay
 
 import requests, csv, sys, os, urllib.parse, time, datetime, logging
@@ -37,7 +39,7 @@ def auth():
 	except Exception as err:
 		logger.error(f'Other error occurred: {err}')
 	else:
-		logger.info('Authorization successful!')
+		logger.info('✔️ Authentication successful')
 
 	if response:
 		# logger.info(response.text)
@@ -48,10 +50,9 @@ def auth():
 		code = response_xml.find('APIResponse').find('Code')
 		if code.text == 'SUCCESS':
 			token = response_xml.find('APIResponse').find('Token').text
-			# print(f'Your token is: {token}')
 		else:
 			token = ''
-			logger.error('Authentication failed :(')
+			logger.error('❌ Authentication failed')
 		return token
 
 # create or update the program virtual folders
@@ -189,7 +190,7 @@ def create_sources(token):
 			try:
 				r = requests.get(query)
 			except:
-				logger.info(f'Unable to get Artist ID {ARTIST_ID}')
+				logger.warning(f'Unable to get Artist ID {ARTIST_ID}')
 				pass
 			if r:
 				r_string = r.content
@@ -281,8 +282,8 @@ logger.setLevel(logging.INFO)
 
 # create a file handler
 now = datetime.datetime.now()
-# logfile = now.strftime("%Y-%m-%d-%H-%M") + 'cortex-updates.log'
-handler = logging.FileHandler(directory + 'logs/' + now.strftime("%Y-%m-%d-%H-%M") + '_cortex-updates.log')
+logfile = directory + 'logs/' + now.strftime("%Y-%m-%d-%H-%M") + '_cortex-updates.log'
+handler = logging.FileHandler(logfile)
 handler.setLevel(logging.INFO)
 
 # create a logging format
@@ -296,17 +297,19 @@ logger.addHandler(handler)
 logger.info('=======================')
 logger.info('Script started...')
 
+# Run the auth function to get a token
 token = auth()
 
 if token != '':
-	logger.info('We have a token! Proceeding...')
+	logger.info('🔑 We have a token! Proceeding...')
+	# print(f'Your token is: {token}')
 
 	# make_folders(token)
 	# update_folders(token)
 	# create_sources(token)
 	# add_sources_to_program(token)
 	
-	logger.info('*********ALL DONE!*********')
+	logger.info('ALL DONE! Bye 👋')
 
 else:
 	logger.info('Goodbye')
