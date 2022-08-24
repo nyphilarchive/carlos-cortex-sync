@@ -48,7 +48,7 @@ def auth():
 		code = response_xml.find('APIResponse').find('Code')
 		if code.text == 'SUCCESS':
 			token = response_xml.find('APIResponse').find('Token').text
-			# logger.info(f'Your token is: {token}')
+			print(f'token: {token}')
 		else:
 			logger.info('Authentication failed :( Bye!')
 			sys.exit()
@@ -130,9 +130,6 @@ def update_folders(token):
 def create_sources(token):
 	logger.info('Creating/updating Source records...')
 
-	# We don't want to always overwrite the Role field
-	# So we'll do a query for each Source, grab that field, parse it, then add any new values to it
-
 	with open(directory+'source_accounts_composers.csv', 'r') as file:
 		csvfile = csv.reader(file)
 
@@ -144,12 +141,27 @@ def create_sources(token):
 			LAST = row[4]
 			BIRTH = row[5]
 			DEATH = row[6]
+			ROLES = []
 
-			query = '' # get roles
-			# if 'Composer' not in roles:
-				# add it
+			# We want to preserve the Role field for our Source, which may have other data
+			# So we'll do a Read for each Source, grab the Role field, then add any new values to it
+			parameters = f'Contacts.Source.Default:Read?CoreField.Artist-ID={COMPOSER_ID}'
+			query = baseurl + datatable + parameters + '&token=' + token
+			try:
+				r = requests.get(query)
+			except:
+				pass
+			if r:
+				r_string = r.content
+				r_xml = ET.fromstring(r_string)
+				ROLES = r_xml.find('Response').find('Record').find('CoreField.Role')
+				ROLES.split('|')
 
-			parameters = f"Contacts.Source.Default:CreateOrUpdate?CoreField.Composer-ID={COMPOSER_ID}&CoreField.First-name:={FIRST}&CoreField.Middle-initial:={MIDDLE}&CoreField.Last-name:={LAST}&CoreField.Display-name:={DISPLAY}&CoreField.Birth-Year:={BIRTH}&CoreField.Death-Year:={DEATH}"
+			if 'Composer' not in ROLES:
+				ROLES.append('Composer')
+			('|').join(ROLES)
+
+			parameters = f"Contacts.Source.Default:CreateOrUpdate?CoreField.Composer-ID={COMPOSER_ID}&CoreField.First-name:={FIRST}&CoreField.Middle-initial:={MIDDLE}&CoreField.Last-name:={LAST}&CoreField.Display-name:={DISPLAY}&CoreField.Birth-Year:={BIRTH}&CoreField.Death-Year:={DEATH}&CoreField.Role:={ROLES}"
 			parameters = urllib.parse.quote(parameters)
 			call = baseurl + datatable + parameters + '&token=' + token
 			api_call(call,'Source: Composer',COMPOSER_ID)
