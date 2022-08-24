@@ -371,12 +371,12 @@ for row in carlos_input:
 ## create output files ##
 #########################
 
-# make_folders(carlos_data)
+make_folders(carlos_data)
 
 sources(carlos_data)
 
-# people(carlos_data,'composers')
-# people(carlos_data,'conductors')
-# people(carlos_data,'soloists')
+people(carlos_data,'composers')
+people(carlos_data,'conductors')
+people(carlos_data,'soloists')
 
-# program_data(carlos_data)
+program_data(carlos_data)
