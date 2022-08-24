@@ -33,14 +33,14 @@ def auth():
 
 		response.raise_for_status()
 	except HTTPError as http_err:
-		logger.info(f'HTTP error occurred: {http_err}')
+		logger.error(f'HTTP error occurred: {http_err}')
 	except Exception as err:
-		logger.info(f'Other error occurred: {err}')
+		logger.error(f'Other error occurred: {err}')
 	else:
-		logger.info('Success!')
+		logger.info('Authorization successful!')
 
 	if response:
-		logger.info(response.text)
+		# logger.info(response.text)
 
 		# parse the XML response
 		response_string = response.content
@@ -48,10 +48,10 @@ def auth():
 		code = response_xml.find('APIResponse').find('Code')
 		if code.text == 'SUCCESS':
 			token = response_xml.find('APIResponse').find('Token').text
-			print(f'token: {token}')
+			# print(f'Your token is: {token}')
 		else:
-			logger.info('Authentication failed :( Bye!')
-			sys.exit()
+			token = ''
+			logger.error('Authentication failed :(')
 		return token
 
 # create or update the program virtual folders
@@ -178,16 +178,34 @@ def create_sources(token):
 			LAST = row[4]
 			BIRTH = row[5]
 			DEATH = row[6]
-			ROLE = row[7]
+			ROLES = row[7]
 			ORCHESTRA = row[8]
 			ORCHESTRA_YEARS = row[9]
 
-			query = '' # get roles
-			# for role in ROLE.split('|'):
-				# if role not in roles
-					# add it
+			# We want to preserve the Role field for our Source, which may have other data
+			# So we'll do a Read for each Source, grab the Role field, then add any new values to it
+			parameters = f'Contacts.Source.Default:Read?CoreField.Artist-ID={ARTIST_ID}'
+			query = baseurl + datatable + parameters + '&token=' + token
+			try:
+				r = requests.get(query)
+			except:
+				logger.info(f'Unable to get Artist ID {ARTIST_ID}')
+				pass
+			if r:
+				r_string = r.content
+				r_xml = ET.fromstring(r_string)
+				existing_roles = r_xml.find('Response').find('Record').find('CoreField.Role')
+				existing_roles.split('|')
+
+				# if we have existing roles for this person, see if the new roles are already there; if not, add them to existing
+				new_roles = ROLES.split('|')
+				for role in new_roles:
+					if role not in existing_roles:
+						logger.info(f'Adding new role {role} to {DISPLAY}')
+						existing_roles.append(role)
+				ROLES = ('|').join(existing_roles)
 	
-			parameters = f"Contacts.Source.Default:CreateOrUpdate?CoreField.Artist-ID={ARTIST_ID}&CoreField.First-name:={FIRST}&CoreField.Middle-initial:={MIDDLE}&CoreField.Last-name:={LAST}&CoreField.Display-name:={DISPLAY}&CoreField.Birth-Year:={BIRTH}&CoreField.Death-Year:={DEATH}&CoreField.Role:={ROLE}&CoreField.Orchestra-Membership:={ORCHESTRA}&CoreField.Orchestra-Membership-Year:={ORCHESTRA_YEARS}"
+			parameters = f"Contacts.Source.Default:CreateOrUpdate?CoreField.Artist-ID={ARTIST_ID}&CoreField.First-name:={FIRST}&CoreField.Middle-initial:={MIDDLE}&CoreField.Last-name:={LAST}&CoreField.Display-name:={DISPLAY}&CoreField.Birth-Year:={BIRTH}&CoreField.Death-Year:={DEATH}&CoreField.Role:={ROLES}&CoreField.Orchestra-Membership:={ORCHESTRA}&CoreField.Orchestra-Membership-Year:={ORCHESTRA_YEARS}"
 			parameters = urllib.parse.quote(parameters)
 			call = baseurl + datatable + parameters + '&token=' + token
 			api_call(call,'Source: Artist',ARTIST_ID)
@@ -245,9 +263,9 @@ def api_call(call,asset_type,ID):
 		# If the response was successful, no Exception will be raised
 		response.raise_for_status()
 	except HTTPError as http_err:
-		logger.info(f'HTTP error occurred with {asset_type} {ID}: {http_err}')
+		logger.error(f'HTTP error occurred with {asset_type} {ID}: {http_err}')
 	except Exception as err:
-		logger.info(f'Other error occurred with {asset_type} {ID}: {err}')
+		logger.error(f'Other error occurred with {asset_type} {ID}: {err}')
 	else:
 		logger.info(f'Success updating {asset_type} {ID}')
 
@@ -263,8 +281,8 @@ logger.setLevel(logging.INFO)
 
 # create a file handler
 now = datetime.datetime.now()
-logfile = now.strftime("%Y-%m-%d-%H-%M") + '.log'
-handler = logging.FileHandler(directory + 'logs/' + now.strftime("%Y-%m-%d-%H-%M") + '.log')
+# logfile = now.strftime("%Y-%m-%d-%H-%M") + 'cortex-updates.log'
+handler = logging.FileHandler(directory + 'logs/' + now.strftime("%Y-%m-%d-%H-%M") + '_cortex-updates.log')
 handler.setLevel(logging.INFO)
 
 # create a logging format
@@ -278,7 +296,6 @@ logger.addHandler(handler)
 logger.info('=======================')
 logger.info('Script started...')
 
-token = ''
 token = auth()
 
 if token != '':
@@ -289,4 +306,7 @@ if token != '':
 	# create_sources(token)
 	# add_sources_to_program(token)
 	
-	logger.info('*********\nALL DONE!\n*********')
+	logger.info('*********ALL DONE!*********')
+
+else:
+	logger.info('Goodbye')
