@@ -5,11 +5,11 @@
 # 4. metadata for the virtual folders, excluding composers, conductors, and soloists
 # by Bill Levay
 
-import sys, csv, json, re
+import sys, csv, json, re, os
 
 directory = '/mnt/x/CARLOS/CSV/'
 
-def make_folders(data):
+def make_folders(data,all_data):
 # create csv of virtual folder names
 # for programs with related programs only the one with the primary flag should get a top-level folder
 # the other related programs should be child folders
@@ -32,7 +32,7 @@ def make_folders(data):
 
 		# only create folders for seasons that are already in Cortex
 		# you may need to run a new Cortex report for season folders
-		# go to Programs top-level folder, turn off "see through", filter for Containers only, run report
+		# go to Programs top-level folder, turn off "see thru", filter for Containers only, run report
 		season = data[program]['SEASON']
 		if season in seasons:
 			folder = {}
@@ -83,30 +83,33 @@ def make_folders(data):
 			# otherwise it's a secondary
 			else:
 				folder['level'] = 'secondary'
-			
+
+
 			# if it's a secondary, get the primary ID
+			# look in all_data because the primary might not be included in the update csv
 			if folder['level'] == 'secondary':
 				
 				# get the related program IDs
 				# loop through them and determine which one is the primary
 				related = []
 				also_related = []
-				if '|' in data[program]['RELATED_PROG_IDS']:
-					related = data[program]['RELATED_PROG_IDS'].split('|')
+				if '|' in all_data[program]['RELATED_PROG_IDS']:
+					related = all_data[program]['RELATED_PROG_IDS'].split('|')
 				else:
-					related = [data[program]['RELATED_PROG_IDS']]
+					related = [all_data[program]['RELATED_PROG_IDS']]
 				for x in related:
-					if x != '' and data[x]['PRIMARY_PROGRAM_FLAG'] == 'Primary':
+					if x in all_data and all_data[x]['PRIMARY_PROGRAM_FLAG'] == 'Primary':
 						folder['parent_program_id'] = x
-					elif x != '':
-						also_related += data[x]['RELATED_PROG_IDS'].split('|')
+					elif x in all_data:
+						also_related += all_data[x]['RELATED_PROG_IDS'].split('|')
 				
 				# if we didn't get a parent_program_id, check the also related list
 				if 'parent_program_id' not in folder and len(also_related) > 0:
 					for y in also_related:
-						if y != '' and data[y]['PRIMARY_PROGRAM_FLAG'] == 'Primary':
+						if y != '' and all_data[y]['PRIMARY_PROGRAM_FLAG'] == 'Primary':
 							folder['parent_program_id'] = y
-				
+			
+			# finally, add it to the list
 			folders.append(folder)
 
 	# with open(directory+'cortex_folder_names.json', 'w', encoding='UTF-8') as jsonfile:
@@ -334,7 +337,7 @@ def program_data(data):
 
 	# save as csv
 	print('Writing CSV file...')
-	fieldnames = data['2566'].keys()
+	fieldnames = next(iter(data.values())).keys()
 	with open(directory+'cortex/program_data_for_cortex.csv', 'w', newline='', encoding='ISO-8859-1') as csvfile:
 		writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
 		writer.writeheader()
@@ -350,9 +353,12 @@ def program_data(data):
 # pass the file name as an argument
 path = sys.argv[1]
 
-# set up dictionary and open csv
+# set up dictionaries and open csv
 carlos_data = {}
 carlos_input = csv.DictReader(open(path, encoding='ISO-8859-1'))
+all_carlos_data = {}
+all_carlos_path = os.path.realpath(path).replace('_updates','')
+all_carlos_input = csv.DictReader(open(all_carlos_path, encoding='ISO-8859-1'))
 
 # get the list of Season folders
 season_file = csv.DictReader(open(directory+'cortex-seasons.csv'))
@@ -360,18 +366,21 @@ seasons = []
 for row in season_file:
 	seasons.append(row['season'])
 
-# populate dictionary
+# populate dictionaries
 for row in carlos_input:
 	programId = row['ID']
 	if row['SEASON'] in seasons:
 		carlos_data[programId] = row
 
+for row in all_carlos_input:
+	programId = row['ID']
+	all_carlos_data[programId] = row
 
 #########################
 ## create output files ##
 #########################
 
-make_folders(carlos_data)
+make_folders(carlos_data,all_carlos_data)
 
 sources(carlos_data)
 
