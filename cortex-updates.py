@@ -7,7 +7,8 @@
 #
 # by Bill Levay
 
-import requests, csv, sys, os, urllib.parse, time, datetime, logging
+import requests, csv, sys, os, time, datetime, logging
+from urllib.parse import quote
 from os.path import join, dirname
 from requests.exceptions import HTTPError
 import xml.etree.ElementTree as ET
@@ -25,7 +26,7 @@ def auth():
 	load_dotenv(dotenv_path)
 	login = os.environ.get('login', 'default')
 	password = os.environ.get('password', 'default')
-	password = urllib.parse.quote(password)
+	password = quote(password)
 
 	auth_string = f"/API/Authentication/v1.0/Login?Login={login}&Password={password}"
 
@@ -61,8 +62,9 @@ def make_folders(token):
 	
 	with open(directory+'cortex_folder_names.csv', 'r') as file:
 		csvfile = csv.reader(file)
+		next(csvfile)
 
-		for row in csvfile[1:]:
+		for row in csvfile:
 			season_folder_id = row[0]
 			program_id = row[1]
 			folder_name = row[2]
@@ -70,7 +72,7 @@ def make_folders(token):
 
 			if ordinal == 'primary':
 				parameters = f"Documents.Virtual-folder.Program:CreateOrUpdate?CoreField.Legacy-Identifier={program_id}&CoreField.Title:={folder_name}&NYP.Program-ID:={program_id}&CoreField.Parent-folder:=[Documents.Virtual-folder.Program:CoreField.Unique-identifier={season_folder_id}]"
-				parameters = urllib.parse.quote(parameters)
+				parameters = quote(parameters)
 				call = baseurl + datatable + parameters + '&token=' + token
 				api_call(call,'Virtual Folder',program_id)
 
@@ -82,7 +84,7 @@ def make_folders(token):
 
 			if ordinal == 'secondary':
 				parameters = f"Documents.Virtual-folder.Program:CreateOrUpdate?CoreField.Legacy-Identifier={program_id}&CoreField.Title:={folder_name}&NYP.Program-ID:={program_id}&CoreField.Parent-folder:=[Documents.Virtual-folder.Program:CoreField.Legacy-Identifier={parent_program}]"
-				parameters = urllib.parse.quote(parameters)
+				parameters = quote(parameters)
 				call = baseurl + datatable + parameters + '&token=' + token
 
 				api_call(call,'Virtual Folder',program_id)
@@ -95,8 +97,9 @@ def update_folders(token):
 	
 	with open(directory+'program_data_for_cortex.csv', 'r', encoding='ISO-8859-1') as file:
 		csvfile = csv.reader(file)
+		next(csvfile)
 
-		for row in csvfile[1:]:
+		for row in csvfile:
 			ID = row[0]
 			SEASON = row[1]
 			WEEK = row[2]
@@ -114,13 +117,13 @@ def update_folders(token):
 
 			# clear values from program folders
 			parameters = f"Documents.Virtual-folder.Program:CreateOrUpdate?CoreField.Legacy-Identifier={ID}&NYP.Season--=&NYP.Orchestra--=&NYP.Program-Date(s)--=&NYP.Program-Times--=&NYP.Location--=&NYP.Venue--=&NYP.Event-Type--=&NYP.Soloist-/-Instrument--=&NYP.Composer/Work--=&NYP.Soloist--=&NYP.Conductor--=&NYP.Composer--="
-			parameters = urllib.parse.quote(parameters)
+			parameters = quote(parameters)
 			call = baseurl + datatable + parameters + '&token=' + token
 			api_call(call,'Virtual Folder',ID)	
 			
 			# update program metadata
 			parameters = f"Documents.Virtual-folder.Program:CreateOrUpdate?CoreField.Legacy-Identifier={ID}&NYP.Season+={SEASON}&NYP.Week:={WEEK}&NYP.Orchestra+:={ORCHESTRA_NAME}&NYP.Program-Date(s)++={DATE}&NYP.Program-Date-Range:={DATE_RANGE}&NYP.Program-Times++={PERFORMANCE_TIME}&NYP.Location++={LOCATION_NAME}&NYP.Venue++={VENUE_NAME}&NYP.Event-Type++={SUB_EVENT_NAMES}&NYP.Soloist-/-Instrument++={SOLOIST_SLASH_INSTRUMENT}&NYP.Composer/Work++={COMPOSER_TITLE_SHORT}&NYP.Notes-on-program:={NOTES_XML}&NYP.Composer/Work-Full-Title:={COMPOSER_TITLE}"
-			parameters = urllib.parse.quote(parameters)
+			parameters = quote(parameters)
 			call = baseurl + datatable + parameters + '&token=' + token
 			api_call(call,'Virtual Folder',ID)	
 
@@ -133,50 +136,65 @@ def create_sources(token):
 
 	with open(directory+'source_accounts_composers.csv', 'r') as file:
 		csvfile = csv.reader(file)
+		next(csvfile)
 
-		for row in csvfile[1:]:
+		for row in csvfile:
 			COMPOSER_ID = row[0]
 			DISPLAY = row[1]
+			DISPLAY_url = quote(DISPLAY.encode("utf-8"))
 			FIRST = row[2]
+			FIRST_url = quote(FIRST.encode("utf-8"))
 			MIDDLE = row[3]
+			MIDDLE_url = quote(MIDDLE.encode("utf-8"))
 			LAST = row[4]
+			LAST_url = quote(LAST.encode("utf-8"))
 			BIRTH = row[5]
 			DEATH = row[6]
 			ROLES = []
 
 			# We want to preserve the Role field for our Source, which may have other data
 			# So we'll do a Read for each Source, grab the Role field, then add any new values to it
-			parameters = f'Contacts.Source.Default:Read?CoreField.Artist-ID={COMPOSER_ID}'
+			parameters = f'Contacts.Source.Default:Read?CoreField.Composer-ID={COMPOSER_ID}'
 			query = baseurl + datatable + parameters + '&token=' + token
 			try:
 				r = requests.get(query)
 			except:
+				logger.warning(f'Unable to get Composer ID {COMPOSER_ID}')
 				pass
 			if r:
 				r_string = r.content
 				r_xml = ET.fromstring(r_string)
-				ROLES = r_xml.find('Response').find('Record').find('CoreField.Role')
-				ROLES.split('|')
+				if r_xml is not None:
+					ROLES_xml = r_xml.find('Response').find('Record').find('CoreField.Role')
+					if ROLES_xml is not None:
+						ROLES = ROLES_xml.text.split('|')
 
 			if 'Composer' not in ROLES:
 				ROLES.append('Composer')
-			('|').join(ROLES)
+				logger.info(f'Adding Composer role to {DISPLAY}')
+			
+			ROLES = ('|').join(ROLES)
 
-			parameters = f"Contacts.Source.Default:CreateOrUpdate?CoreField.Composer-ID={COMPOSER_ID}&CoreField.First-name:={FIRST}&CoreField.Middle-initial:={MIDDLE}&CoreField.Last-name:={LAST}&CoreField.Display-name:={DISPLAY}&CoreField.Birth-Year:={BIRTH}&CoreField.Death-Year:={DEATH}&CoreField.Role:={ROLES}"
-			parameters = urllib.parse.quote(parameters)
+			parameters = f"Contacts.Source.Default:CreateOrUpdate?CoreField.Composer-ID={COMPOSER_ID}&CoreField.First-name:={FIRST_url}&CoreField.Middle-initial:={MIDDLE_url}&CoreField.Last-name:={LAST_url}&CoreField.Display-name:={DISPLAY_url}&CoreField.Birth-Year:={BIRTH}&CoreField.Death-Year:={DEATH}&CoreField.Role:={ROLES}"
+			# parameters = quote(parameters)
 			call = baseurl + datatable + parameters + '&token=' + token
 			api_call(call,'Source: Composer',COMPOSER_ID)
 	file.close()
 
 	with open(directory+'source_accounts_artists.csv', 'r') as file:
 		csvfile = csv.reader(file)
+		next(csvfile)
 
-		for row in csvfile[1:]:
+		for row in csvfile:
 			ARTIST_ID = row[0]
 			DISPLAY = row[1]
+			DISPLAY_url = quote(DISPLAY.encode("utf-8"))
 			FIRST = row[2]
+			FIRST_url = quote(FIRST.encode("utf-8"))
 			MIDDLE = row[3]
+			MIDDLE_url = quote(MIDDLE.encode("utf-8"))
 			LAST = row[4]
+			LAST_url = quote(LAST.encode("utf-8"))
 			BIRTH = row[5]
 			DEATH = row[6]
 			ROLES = row[7]
@@ -195,8 +213,8 @@ def create_sources(token):
 			if r:
 				r_string = r.content
 				r_xml = ET.fromstring(r_string)
-				existing_roles = r_xml.find('Response').find('Record').find('CoreField.Role')
-				existing_roles.split('|')
+				existing_roles_xml = r_xml.find('Response').find('Record').find('CoreField.Role')
+				existing_roles = existing_roles_xml.text.split('|')
 
 				# if we have existing roles for this person, see if the new roles are already there; if not, add them to existing
 				new_roles = ROLES.split('|')
@@ -206,8 +224,8 @@ def create_sources(token):
 						existing_roles.append(role)
 				ROLES = ('|').join(existing_roles)
 	
-			parameters = f"Contacts.Source.Default:CreateOrUpdate?CoreField.Artist-ID={ARTIST_ID}&CoreField.First-name:={FIRST}&CoreField.Middle-initial:={MIDDLE}&CoreField.Last-name:={LAST}&CoreField.Display-name:={DISPLAY}&CoreField.Birth-Year:={BIRTH}&CoreField.Death-Year:={DEATH}&CoreField.Role:={ROLES}&CoreField.Orchestra-Membership:={ORCHESTRA}&CoreField.Orchestra-Membership-Year:={ORCHESTRA_YEARS}"
-			parameters = urllib.parse.quote(parameters)
+			parameters = f"Contacts.Source.Default:CreateOrUpdate?CoreField.Artist-ID={ARTIST_ID}&CoreField.First-name:={FIRST_url}&CoreField.Middle-initial:={MIDDLE_url}&CoreField.Last-name:={LAST_url}&CoreField.Display-name:={DISPLAY_url}&CoreField.Birth-Year:={BIRTH}&CoreField.Death-Year:={DEATH}&CoreField.Role:={ROLES}&CoreField.Orchestra-Membership:={ORCHESTRA}&CoreField.Orchestra-Membership-Year:={ORCHESTRA_YEARS}"
+			# parameters = quote(parameters)
 			call = baseurl + datatable + parameters + '&token=' + token
 			api_call(call,'Source: Artist',ARTIST_ID)
 
@@ -220,39 +238,42 @@ def add_sources_to_program(token):
 
 	with open(directory+'soloists.csv', 'r') as file:
 		csvfile = csv.reader(file)
+		next(csvfile)
 
-		for row in csvfile[1:]:
+		for row in csvfile:
 			Program_ID = row[0]
 			Artist_ID = row[1]
 
 			parameters = f"Documents.Virtual-folder.Program:CreateOrUpdate?CoreField.Legacy-Identifier={Program_ID}&NYP.Soloist+=[Contacts.Source.Default:CoreField.Artist-ID={Artist_ID}]"
-			parameters = urllib.parse.quote(parameters)
+			parameters = quote(parameters)
 			call = baseurl + datatable + parameters + '&token=' + token
 			api_call(call,'Virtual Folder',Program_ID)
 	file.close()
 
 	with open(directory+'conductors.csv', 'r') as file:
 		csvfile = csv.reader(file)
+		next(csvfile)
 
-		for row in csvfile[1:]:
+		for row in csvfile:
 			Program_ID = row[0]
 			Artist_ID = row[1]
 			
 			parameters = f"Documents.Virtual-folder.Program:CreateOrUpdate?CoreField.Legacy-Identifier={Program_ID}&NYP.Conductor+=[Contacts.Source.Default:CoreField.Artist-ID={Artist_ID}]"
-			parameters = urllib.parse.quote(parameters)
+			parameters = quote(parameters)
 			call = baseurl + datatable + parameters + '&token=' + token
 			api_call(call,'Virtual Folder',Program_ID)
 	file.close()
 
 	with open(directory+'composers.csv', 'r') as file:
 		csvfile = csv.reader(file)
+		next(csvfile)
 
-		for row in csvfile[1:]:
+		for row in csvfile:
 			Program_ID = row[0]
 			Composer_ID = row[1]
 	
 			parameters = f"Documents.Virtual-folder.Program:CreateOrUpdate?CoreField.Legacy-Identifier={Program_ID}&NYP.Composer+=[Contacts.Source.Default:CoreField.Composer-ID={Composer_ID}"
-			parameters = urllib.parse.quote(parameters)
+			parameters = quote(parameters)
 			call = baseurl + datatable + parameters + '&token=' + token
 			api_call(call,'Virtual Folder',Program_ID)
 	file.close()
@@ -269,6 +290,7 @@ def api_call(call,asset_type,ID):
 		logger.error(f'Other error occurred with {asset_type} {ID}: {err}')
 	else:
 		logger.info(f'Success updating {asset_type} {ID}')
+		return response
 
 
 
@@ -302,11 +324,11 @@ token = auth()
 
 if token != '':
 	logger.info('🔑 We have a token! Proceeding...')
-	# print(f'Your token is: {token}')
+	print(f'Your token is: {token}')
 
 	# make_folders(token)
 	# update_folders(token)
-	# create_sources(token)
+	create_sources(token)
 	# add_sources_to_program(token)
 	
 	logger.info('ALL DONE! Bye 👋')
