@@ -71,7 +71,7 @@ def make_folders(token):
 			ordinal = row[3]
 
 			if ordinal == 'primary':
-				parameters = f"Documents.Virtual-folder.Program:CreateOrUpdate?CoreField.Legacy-Identifier={program_id}&CoreField.Title:={folder_name}&NYP.Program-ID:={program_id}&CoreField.Parent-folder:=[Documents.Virtual-folder.Program:CoreField.Unique-identifier={season_folder_id}]"
+				parameters = f"Documents.Virtual-folder.Program:CreateOrUpdate?CoreField.Legacy-Identifier={program_id}&CoreField.Title:={folder_name}&NYP.Program-ID:={program_id}&CoreField.visibility-class:=Internal use only&CoreField.Parent-folder:=[Documents.Virtual-folder.Program:CoreField.Unique-identifier={season_folder_id}]"
 				parameters = quote(parameters)
 				call = baseurl + datatable + parameters + '&token=' + token
 				api_call(call,'Virtual Folder',program_id)
@@ -83,7 +83,7 @@ def make_folders(token):
 			parent_program = row[4]
 
 			if ordinal == 'secondary':
-				parameters = f"Documents.Virtual-folder.Program:CreateOrUpdate?CoreField.Legacy-Identifier={program_id}&CoreField.Title:={folder_name}&NYP.Program-ID:={program_id}&CoreField.Parent-folder:=[Documents.Virtual-folder.Program:CoreField.Legacy-Identifier={parent_program}]"
+				parameters = f"Documents.Virtual-folder.Program:CreateOrUpdate?CoreField.Legacy-Identifier={program_id}&CoreField.Title:={folder_name}&NYP.Program-ID:={program_id}&CoreField.visibility-class:=Internal use only&CoreField.Parent-folder:=[Documents.Virtual-folder.Program:CoreField.Legacy-Identifier={parent_program}]"
 				parameters = quote(parameters)
 				call = baseurl + datatable + parameters + '&token=' + token
 
@@ -180,7 +180,9 @@ def create_sources(token):
 			call = baseurl + datatable + parameters + '&token=' + token
 			api_call(call,'Source: Composer',COMPOSER_ID)
 	file.close()
+	logger.info('Finished updating Composers')
 
+	logger.info('Starting on Artists...')
 	with open(directory+'source_accounts_artists.csv', 'r') as file:
 		csvfile = csv.reader(file)
 		next(csvfile)
