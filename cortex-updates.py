@@ -1,5 +1,8 @@
-# Cortex API calls for Carlos metadata updates
+# Keep Cortex synced with Carlos metadata updates
+#
 # This script will read various CSVs and execute the appropriate API calls to create or update records
+#
+# by Bill Levay
 #
 # Make sure you have an .env file in this directory that looks like this:
 # login=yourlogin
@@ -8,8 +11,7 @@
 # logs=/location/for/logs/
 # baseurl=https://mydomain.org
 # datatable=/API/DataTable/v2.2/
-#
-# by Bill Levay
+################################
 
 import requests, csv, sys, os, time, datetime, logging
 from urllib.parse import quote
@@ -18,16 +20,19 @@ from requests.exceptions import HTTPError
 import xml.etree.ElementTree as ET
 from dotenv import load_dotenv
 
-# first grab credentials and other values from the .env file in the same folder as this script
+
+# First, grab credentials and other values from the .env file in the same folder as this script
 dotenv_path = join(dirname(__file__), '.env')
 load_dotenv(dotenv_path)
 
 login = os.environ.get('login', 'default')
 password = os.environ.get('password', 'default')
-password = quote(password)
+password = quote(password) # now URL encoded
 directory = os.environ.get('directory', 'default')
+logs = os.environ.get('logs', 'default')
 baseurl = os.environ.get('baseurl', 'default')
 datatable = os.environ.get('datatable', 'default')
+
 
 # get a new token from the Login API
 def auth():
@@ -59,6 +64,7 @@ def auth():
 			token = ''
 			logger.error('❌ Authentication failed')
 		return token
+
 
 # create or update the program virtual folders
 def make_folders(token):
@@ -102,6 +108,7 @@ def make_folders(token):
 	file.close()
 	logger.info('Done')
 
+
 # update metadata for the program virtual folders, but first clear out multi-value fields so we're not just appending stuff
 def update_folders(token):
 	logger.info('Updating program folder metadata...')
@@ -140,6 +147,7 @@ def update_folders(token):
 
 	file.close()
 	logger.info('Done')
+
 
 # create or update the Source accounts that represent people
 def create_sources(token):
@@ -245,6 +253,7 @@ def create_sources(token):
 	file.close()
 	logger.info('Done')
 
+
 # now that the Sources have been created/updated, we can add them to the program virtual folders
 def add_sources_to_program(token):
 	logger.info('Adding Sources to program folders...')
@@ -291,6 +300,7 @@ def add_sources_to_program(token):
 			api_call(call,'Virtual Folder',Program_ID)
 	file.close()
 
+
 def api_call(call,asset_type,ID):
 	try: 
 		response = requests.get(call)
@@ -319,7 +329,7 @@ logger.setLevel(logging.INFO)
 
 # create a file handler
 now = datetime.datetime.now()
-logfile = directory + 'logs/' + now.strftime("%Y-%m-%d-%H-%M") + '_cortex-updates.log'
+logfile = logs + now.strftime("%Y-%m-%d-%H-%M") + '_cortex-updates.log'
 handler = logging.FileHandler(logfile)
 handler.setLevel(logging.INFO)
 
