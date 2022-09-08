@@ -2,8 +2,12 @@
 # This script will read various CSVs and execute the appropriate API calls to create or update records
 #
 # Make sure you have an .env file in this directory that looks like this:
-# login = 'yourlogin'
-# password = 'yourpassword'
+# login=yourlogin
+# password=yourpassword
+# directory=/location/of/csvs/
+# logs=/location/for/logs/
+# baseurl=https://mydomain.org
+# datatable=/API/DataTable/v2.2/
 #
 # by Bill Levay
 
@@ -14,19 +18,19 @@ from requests.exceptions import HTTPError
 import xml.etree.ElementTree as ET
 from dotenv import load_dotenv
 
-# CONSTANTS
-directory = '/mnt/x/CARLOS/CSV/cortex/'
-baseurl = 'https://cortex.nyphil.org'
-datatable = '/API/DataTable/v2.2/'
+# first grab credentials and other values from the .env file in the same folder as this script
+dotenv_path = join(dirname(__file__), '.env')
+load_dotenv(dotenv_path)
+
+login = os.environ.get('login', 'default')
+password = os.environ.get('password', 'default')
+password = quote(password)
+directory = os.environ.get('directory', 'default')
+baseurl = os.environ.get('baseurl', 'default')
+datatable = os.environ.get('datatable', 'default')
 
 # get a new token from the Login API
 def auth():
-	# first grab the credentials from the .env file in the same folder as this script
-	dotenv_path = join(dirname(__file__), '.env')
-	load_dotenv(dotenv_path)
-	login = os.environ.get('login', 'default')
-	password = os.environ.get('password', 'default')
-	password = quote(password)
 
 	auth_string = f"/API/Authentication/v1.0/Login?Login={login}&Password={password}"
 
@@ -58,13 +62,19 @@ def auth():
 
 # create or update the program virtual folders
 def make_folders(token):
-	logger.info('Creating/updating program folders...')
 	
 	with open(directory+'cortex_folder_names.csv', 'r') as file:
 		csvfile = csv.reader(file)
-		next(csvfile)
 
-		for row in csvfile:
+		# Convert csv.reader object to list so we can loop through it twice
+		rows = list(csvfile)
+
+		# Get a count of Programs to be updated and log it
+		row_count = len(rows[1:])
+		logger.info(f"Creating/updating {row_count} program folders...")
+
+		# Loop through rows for primary folders first and make sure they're created
+		for row in rows[1:]:
 			season_folder_id = row[0]
 			program_id = row[1]
 			folder_name = row[2]
@@ -76,7 +86,8 @@ def make_folders(token):
 				call = baseurl + datatable + parameters + '&token=' + token
 				api_call(call,'Virtual Folder',program_id)
 
-		for row in csvfile:
+		# Now loop through again for secondary programs and assign them to the primary folders
+		for row in rows[1:]:
 			program_id = row[1]
 			folder_name = row[2]
 			ordinal = row[3]
@@ -87,7 +98,7 @@ def make_folders(token):
 				parameters = quote(parameters)
 				call = baseurl + datatable + parameters + '&token=' + token
 
-				api_call(call,'Virtual Folder',program_id)
+				api_call(call,'Program Folder',program_id)
 	file.close()
 	logger.info('Done')
 
@@ -119,7 +130,7 @@ def update_folders(token):
 			parameters = f"Documents.Virtual-folder.Program:CreateOrUpdate?CoreField.Legacy-Identifier={ID}&NYP.Season--=&NYP.Orchestra--=&NYP.Program-Date(s)--=&NYP.Program-Times--=&NYP.Location--=&NYP.Venue--=&NYP.Event-Type--=&NYP.Soloist-/-Instrument--=&NYP.Composer/Work--=&NYP.Soloist--=&NYP.Conductor--=&NYP.Composer--="
 			parameters = quote(parameters)
 			call = baseurl + datatable + parameters + '&token=' + token
-			api_call(call,'Virtual Folder',ID)	
+			api_call(call,'Program Metadata',ID)	
 			
 			# update program metadata
 			parameters = f"Documents.Virtual-folder.Program:CreateOrUpdate?CoreField.Legacy-Identifier={ID}&NYP.Season+={SEASON}&NYP.Week:={WEEK}&NYP.Orchestra+:={ORCHESTRA_NAME}&NYP.Program-Date(s)++={DATE}&NYP.Program-Date-Range:={DATE_RANGE}&NYP.Program-Times++={PERFORMANCE_TIME}&NYP.Location++={LOCATION_NAME}&NYP.Venue++={VENUE_NAME}&NYP.Event-Type++={SUB_EVENT_NAMES}&NYP.Soloist-/-Instrument++={SOLOIST_SLASH_INSTRUMENT}&NYP.Composer/Work++={COMPOSER_TITLE_SHORT}&NYP.Notes-on-program:={NOTES_XML}&NYP.Composer/Work-Full-Title:={COMPOSER_TITLE}"
@@ -287,8 +298,10 @@ def api_call(call,asset_type,ID):
 		# If the response was successful, no Exception will be raised
 		response.raise_for_status()
 	except HTTPError as http_err:
+		logger.error(f'Failed to update {asset_type} {ID} with API call {call}')
 		logger.error(f'HTTP error occurred with {asset_type} {ID}: {http_err}')
 	except Exception as err:
+		logger.error(f'Failed to update {asset_type} {ID} with API call {call}')
 		logger.error(f'Other error occurred with {asset_type} {ID}: {err}')
 	else:
 		logger.info(f'Success updating {asset_type} {ID}')
@@ -330,7 +343,7 @@ if token != '':
 
 	# make_folders(token)
 	# update_folders(token)
-	create_sources(token)
+	# create_sources(token)
 	# add_sources_to_program(token)
 	
 	logger.info('ALL DONE! Bye 👋')
