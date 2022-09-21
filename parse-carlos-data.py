@@ -56,12 +56,13 @@ def make_folders(data,all_data):
 			# get the date
 			date = data[program]['DATE_RANGE'][0:10]
 
-			# clean up composer name
-			composer = data[program]['CONDUCTOR_LAST_NAME'].split('|')[0]
-			composer = re.sub("\\[.*?\\]","",composer)
-			composer = re.sub("\\(.*?\\)","",composer)
-			if composer != '':
-				composer = ' / ' + composer.strip()
+			# clean up conductor name
+			conductor = data[program]['CONDUCTOR_LAST_NAME'].split('|')[0]
+			conductor = bytes(conductor,'iso-8859-1').decode('utf-8')
+			conductor = re.sub("\\[.*?\\]","",conductor)
+			conductor = re.sub("\\(.*?\\)","",conductor)
+			if conductor != '':
+				conductor = ' / ' + conductor.strip()
 
 			# clean up sub event
 			sub_event = data[program]['SUB_EVENT_NAMES'].split('|')[0].replace('Subscription Season', 'Sub').replace('Non-Subscription', 'Non-Sub')
@@ -69,7 +70,7 @@ def make_folders(data,all_data):
 				sub_event = ' / ' + sub_event
 
 			# build the folder name
-			folder['folder_name'] =	week + date + star + sub_event + composer
+			folder['folder_name'] =	week + date + star + sub_event + conductor
 
 			# should this be a primary or secondary folder?
 			# if it has no related programs it's a primary
