@@ -156,10 +156,10 @@ def sources(data):
 			if conductor != '' and int(conductor) not in artists:
 				artists[int(conductor)] = {
 					'Artist ID': conductor,
-					'Display Name': data[program]['CONDUCTOR_NAMES'].split('|')[i],
-					'First Name': data[program]['CONDUCTOR_FIRST_NAME'].split('|')[i],
-					'Middle Name': data[program]['CONDUCTOR_MIDDLE_NAME'].split('|')[i],
-					'Last Name': data[program]['CONDUCTOR_LAST_NAME'].split('|')[i],
+					'Display Name': bytes(data[program]['CONDUCTOR_NAMES'].split('|')[i], 'iso-8859-1').decode('utf-8'),
+					'First Name': bytes(data[program]['CONDUCTOR_FIRST_NAME'].split('|')[i], 'iso-8859-1').decode('utf-8'),
+					'Middle Name': bytes(data[program]['CONDUCTOR_MIDDLE_NAME'].split('|')[i], 'iso-8859-1').decode('utf-8'),
+					'Last Name': bytes(data[program]['CONDUCTOR_LAST_NAME'].split('|')[i], 'iso-8859-1').decode('utf-8'),
 					'Birth Year': data[program]['CONDUCTOR_YEAR_OF_BIRTH'].split('|')[i],
 					'Death Year': data[program]['CONDUCTOR_YEAR_OF_DEATH'].split('|')[i],
 					'Role': 'Conductor',
@@ -197,10 +197,10 @@ def sources(data):
 			if soloistID is not None and soloistID not in artists:
 				artists[soloistID] = {
 					'Artist ID': soloist,
-					'Display Name': data[program]['SOLOIST_NAME'].split('|')[i],
-					'First Name': data[program]['SOLOIST_FIRST_NAME'].split('|')[i],
-					'Middle Name': data[program]['SOLOIST_MIDDLE_NAME'].split('|')[i],
-					'Last Name': data[program]['SOLOIST_LAST_NAME'].split('|')[i],
+					'Display Name': bytes(data[program]['SOLOIST_NAME'].split('|')[i], 'iso-8859-1').decode('utf-8'),
+					'First Name': bytes(data[program]['SOLOIST_FIRST_NAME'].split('|')[i], 'iso-8859-1').decode('utf-8'),
+					'Middle Name': bytes(data[program]['SOLOIST_MIDDLE_NAME'].split('|')[i], 'iso-8859-1').decode('utf-8'),
+					'Last Name': bytes(data[program]['SOLOIST_LAST_NAME'].split('|')[i], 'iso-8859-1').decode('utf-8'),
 					'Birth Year': data[program]['SOLOIST_YEAR_OF_BIRTH'].split('|')[i],
 					'Death Year': data[program]['SOLOIST_YEAR_OF_DEATH'].split('|')[i],
 					'Role': instrument,
@@ -228,10 +228,10 @@ def sources(data):
 			if composer != '' and int(composer) not in composers:
 				composers[int(composer)] = {
 					'Composer ID': composer,
-					'Display Name': data[program]['COMPOSER_NAME'].split('|')[i].replace('  ',' '),
-					'First Name': data[program]['COMPOSER_FIRST_NAME'].split('|')[i],
-					'Middle Name': data[program]['COMPOSER_MIDDLE_NAME'].split('|')[i],
-					'Last Name': data[program]['COMPOSER_LAST_NAME'].split('|')[i],
+					'Display Name': bytes(data[program]['COMPOSER_NAME'].split('|')[i], 'iso-8859-1').decode('utf-8').replace('  ',' '),
+					'First Name': bytes(data[program]['COMPOSER_FIRST_NAME'].split('|')[i], 'iso-8859-1').decode('utf-8'),
+					'Middle Name': bytes(data[program]['COMPOSER_MIDDLE_NAME'].split('|')[i], 'iso-8859-1').decode('utf-8'),
+					'Last Name': bytes(data[program]['COMPOSER_LAST_NAME'].split('|')[i], 'iso-8859-1').decode('utf-8'),
 					'Birth Year': data[program]['COMPOSER_YEAR_OF_BIRTH'].split('|')[i],
 					'Death Year': data[program]['COMPOSER_YEAR_OF_DEATH'].split('|')[i],
 					'Role': 'Composer',
@@ -253,7 +253,7 @@ def sources(data):
 	# save as csv
 	print('Writing Artist CSV file...')
 	fieldnames = next(iter(artists.values())).keys()
-	with open(directory+'cortex/source_accounts_artists.csv', 'w', newline='', encoding='ISO-8859-1') as csvfile:
+	with open(directory+'cortex/source_accounts_artists.csv', 'w', newline='', encoding='UTF-8') as csvfile:
 		writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
 		writer.writeheader()
 		for artist in artists:
@@ -263,7 +263,7 @@ def sources(data):
 	# save as csv
 	print('Writing Composer CSV file...')
 	fieldnames = next(iter(composers.values())).keys()
-	with open(directory+'cortex/source_accounts_composers.csv', 'w', newline='', encoding='ISO-8859-1') as csvfile:
+	with open(directory+'cortex/source_accounts_composers.csv', 'w', newline='', encoding='UTF-8') as csvfile:
 		writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
 		writer.writeheader()
 		for composer in composers:
@@ -303,7 +303,7 @@ def people(data, person_type):
 
 	# dump this list to CSV
 	print('Writing', person_type, 'to CSV...')
-	with open(directory+'cortex/'+person_type+'.csv', 'w', encoding='ISO-8859-1') as f:
+	with open(directory+'cortex/'+person_type+'.csv', 'w', encoding='UTF-8') as f:
 		csv_writer = csv.writer(f)
 		headers = ['Program ID', ID_header]
 		csv_writer.writerow(headers)
@@ -320,10 +320,10 @@ def program_data(data):
 		
 		# clean up whitespace around "New York Philharmonic", etc
 		data[program]['ORCHESTRA_NAME'] = data[program]['ORCHESTRA_NAME'].strip()
-		data[program]['COMPOSER_NAME'] = data[program]['COMPOSER_NAME'].replace('  ',' ')
-		data[program]['COMPOSER_TITLE'] = data[program]['COMPOSER_TITLE'].replace('  ',' ')
-		data[program]['COMPOSER_TITLE_SHORT'] = data[program]['COMPOSER_TITLE_SHORT'].replace('  ',' ')
-		data[program]['SOLOIST_SLASH_INSTRUMENT'] = data[program]['SOLOIST_SLASH_INSTRUMENT'].replace('/',' / ')
+		data[program]['COMPOSER_NAME'] = bytes(data[program]['COMPOSER_NAME'], 'iso-8859-1').decode('utf-8').replace('  ',' ')
+		data[program]['COMPOSER_TITLE'] = bytes(data[program]['COMPOSER_TITLE'], 'iso-8859-1').decode('utf-8').replace('  ',' ')
+		data[program]['COMPOSER_TITLE_SHORT'] = bytes(data[program]['COMPOSER_TITLE_SHORT'], 'iso-8859-1').decode('utf-8').replace('  ',' ')
+		data[program]['SOLOIST_SLASH_INSTRUMENT'] = bytes(data[program]['SOLOIST_SLASH_INSTRUMENT'], 'iso-8859-1').decode('utf-8').replace('/',' / ')
 
 		# remove some columns we don't need for this output file
 		cols_to_remove = ['PRIMARY_PROGRAM_FLAG','CONDUCTOR','CONDUCTOR_NAMES','CONDUCTOR_FIRST_NAME','CONDUCTOR_MIDDLE_NAME','CONDUCTOR_LAST_NAME','CONDUCTOR_YEAR_OF_BIRTH','CONDUCTOR_YEAR_OF_DEATH','SOLOIST','SOLOIST_INSTRUMENT','SOLOIST_YEAR_OF_BIRTH','SOLOIST_YEAR_OF_DEATH','SOLOIST_NAME','SOLOIST_FIRST_NAME','SOLOIST_MIDDLE_NAME','SOLOIST_LAST_NAME','SOLOIST_MEMBER_ORCH_NAME','SOLOIST_MEMBER_ORCH_YEARS','COMPOSER_NUMBER','COMPOSER_NAME','COMPOSER_FIRST_NAME','COMPOSER_MIDDLE_NAME','COMPOSER_LAST_NAME','COMPOSER_YEAR_OF_BIRTH','COMPOSER_YEAR_OF_DEATH','RELATED_PROG_IDS','RELATED_PROG_INFO']
@@ -339,7 +339,7 @@ def program_data(data):
 	# save as csv
 	print('Writing CSV file...')
 	fieldnames = next(iter(data.values())).keys()
-	with open(directory+'cortex/program_data_for_cortex.csv', 'w', newline='', encoding='ISO-8859-1') as csvfile:
+	with open(directory+'cortex/program_data_for_cortex.csv', 'w', newline='', encoding='UTF-8') as csvfile:
 		writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
 		writer.writeheader()
 		for program in data:
