@@ -13,7 +13,7 @@
 # datatable=/API/DataTable/v2.2/
 ################################
 
-import requests, csv, sys, os, time, datetime, logging
+import requests, csv, sys, os, time, datetime, logging, json
 from urllib.parse import quote
 from os.path import join, dirname
 from requests.exceptions import HTTPError
@@ -90,7 +90,7 @@ def make_folders(token):
 			folder_name = row[2]
 			ordinal = row[3]
 
-			if ordinal == 'primary' and int(program_id) > 14730:
+			if ordinal == 'primary':
 				parameters = f"Documents.Virtual-folder.Program:CreateOrUpdate?CoreField.Legacy-Identifier={program_id}&CoreField.Title:={folder_name}&NYP.Program-ID:={program_id}&CoreField.visibility-class:=Internal use only&CoreField.Parent-folder:=[Documents.Virtual-folder.Program:CoreField.Unique-identifier={season_folder_id}]"
 				# parameters = quote(parameters)
 				call = baseurl + datatable + parameters + '&token=' + token
@@ -100,14 +100,20 @@ def make_folders(token):
 
 		# Now loop through again for secondary programs and assign them to the primary folders
 		for row in rows[1:]:
+			season_folder_id = row[0]
 			program_id = row[1]
 			folder_name = row[2]
 			ordinal = row[3]
 			parent_program = row[4]
 
-			if ordinal == 'secondary' and int(program_id) > 14730:
-				parameters = f"Documents.Virtual-folder.Program:CreateOrUpdate?CoreField.Legacy-Identifier={program_id}&CoreField.Title:={folder_name}&NYP.Program-ID:={program_id}&CoreField.visibility-class:=Internal use only&CoreField.Parent-folder:=[Documents.Virtual-folder.Program:CoreField.Legacy-Identifier={parent_program}]"
-				# parameters = quote(parameters)
+			if ordinal == 'secondary':
+
+				# check if there's a value for parent_program... if not, kick it back up to the season level
+				if parent_program != '':
+					parameters = f"Documents.Virtual-folder.Program:CreateOrUpdate?CoreField.Legacy-Identifier={program_id}&CoreField.Title:={folder_name}&NYP.Program-ID:={program_id}&CoreField.visibility-class:=Internal use only&CoreField.Parent-folder:=[Documents.Virtual-folder.Program:CoreField.Legacy-Identifier={parent_program}]"
+				else:
+					parameters = f"Documents.Virtual-folder.Program:CreateOrUpdate?CoreField.Legacy-Identifier={program_id}&CoreField.Title:={folder_name}&NYP.Program-ID:={program_id}&CoreField.visibility-class:=Internal use only&CoreField.Parent-folder:=[Documents.Virtual-folder.Program:CoreField.Unique-identifier={season_folder_id}]"
+
 				call = baseurl + datatable + parameters + '&token=' + token
 				logger.info(f'Updating Program {count} of {total} -- {percent}% complete')
 				api_call(call,'Program Folder',program_id)
@@ -125,7 +131,12 @@ def update_folders(token):
 		csvfile = csv.reader(file)
 		next(csvfile)
 
-		for row in csvfile:
+		count = 1
+		records = list(csvfile)
+		total = len(records[1:])
+		percent = round(count/total, 2)*100
+
+		for row in records[1:]:
 			ID = row[0]
 			SEASON = row[1]
 			WEEK = row[2]
@@ -137,64 +148,50 @@ def update_folders(token):
 			VENUE_NAME = row[8]
 			SUB_EVENT_NAMES = row[9]
 			SOLOIST_SLASH_INSTRUMENT = row[10]
-			COMPOSER_TITLE = row[11].replace('|','\n\n').replace('Intermission, / .','Intermission')
-			COMPOSER_TITLE_SHORT = row[12]
+			COMPOSER_TITLE = row[11].replace('|','\n\n').replace('Intermission, / .','Intermission').replace('<','').replace('>','')
+			COMPOSER_TITLE_SHORT = row[12].replace('<','').replace('>','')
 			NOTES_XML = row[13].replace('<br>','\n')
 
-			# Split the call into parts to avoid errors
+			# if ID in update_list:
+			if ID !='':
 
-			# CALL 1 (Season, Program Date, Time, Location, Venue, Event Type)
-			# clear values from program folders
-			parameters = f"Documents.Virtual-folder.Program:Update?CoreField.Legacy-Identifier={ID}&NYP.Season--=&NYP.Program-Date(s)--=&NYP.Program-Times--=&NYP.Location--=&NYP.Venue--=&NYP.Event-Type--="
-			call = baseurl + datatable + parameters + '&token=' + token
-			api_call(call,'Program - clear old metadata',ID)
-			
-			# update program metadata
-			parameters = f"Documents.Virtual-folder.Program:Update?CoreField.Legacy-Identifier={ID}&NYP.Season+={SEASON}&NYP.Week:={WEEK}&NYP.Orchestra:={ORCHESTRA_NAME}&NYP.Program-Date(s)++={DATE}&NYP.Program-Date-Range:={DATE_RANGE}&NYP.Program-Times++={PERFORMANCE_TIME}&NYP.Location++={LOCATION_NAME}&NYP.Venue++={VENUE_NAME}&NYP.Event-Type++={SUB_EVENT_NAMES}"
-			call = baseurl + datatable + parameters + '&token=' + token
-			api_call(call,'Program - add Season, Program Date, Time, Location, Venue, Event Type',ID)
+				# Create the dict
+				data = {
+					'CoreField.Legacy-Identifier': ID,
+					'NYP.Season+': SEASON,
+					'NYP.Week+:': WEEK,
+					'NYP.Orchestra:': ORCHESTRA_NAME,
+					'NYP.Program-Date(s)++': DATE,
+					'NYP.Program-Date-Range:': DATE_RANGE,
+					'NYP.Program-Times++': PERFORMANCE_TIME,
+					'NYP.Location++': LOCATION_NAME,
+					'NYP.Venue++': VENUE_NAME,
+					'NYP.Event-Type++': SUB_EVENT_NAMES,
+					'NYP.Soloist-/-Instrument++': SOLOIST_SLASH_INSTRUMENT,
+					'NYP.Composer/Work++': COMPOSER_TITLE_SHORT,
+					'NYP.Composer/Work-Full-Title:': COMPOSER_TITLE,
+					'NYP.Notes-on-program:': NOTES_XML
+				}
+				# fix for linebreaks and such - dump to string and load back to JSON
+				data = json.dumps(data)
+				data = json.loads(data)
 
+				# log some info
+				logger.info(f'Updating Program {count} of {total} = {percent}% complete')
 
-			# CALL 2 (Soloist/Instrument)
-			# clear values from program folders
-			parameters = f"Documents.Virtual-folder.Program:Update?CoreField.Legacy-Identifier={ID}&NYP.Soloist-/-Instrument--="
-			call = baseurl + datatable + parameters + '&token=' + token
-			api_call(call,'Program - clear old metadata',ID)
-
-			# update program metadata
-			parameters = f"Documents.Virtual-folder.Program:Update?CoreField.Legacy-Identifier={ID}&NYP.Soloist-/-Instrument++={SOLOIST_SLASH_INSTRUMENT}"
-			call = baseurl + datatable + parameters + '&token=' + token
-			api_call(call,'Program - add Soloists/Instruments',ID)
-			
-
-			# CALL 3 (Composer/Title Short)
-			# clear values from program folders
-			parameters = f"Documents.Virtual-folder.Program:Update?CoreField.Legacy-Identifier={ID}&NYP.Composer/Work--="
-			call = baseurl + datatable + parameters + '&token=' + token
-			api_call(call,'Program - clear old metadata',ID)
-
-			# update program metadata
-			parameters = f"Documents.Virtual-folder.Program:Update?CoreField.Legacy-Identifier={ID}&NYP.Composer/Work++={COMPOSER_TITLE_SHORT}"
-			call = baseurl + datatable + parameters + '&token=' + token
-			api_call(call,'Program - add Composer/Title Short',ID)
-			
-
-			# CALL 4 (Composer/Title Full)			
-			# update program metadata
-			parameters = f"Documents.Virtual-folder.Program:Update?CoreField.Legacy-Identifier={ID}&NYP.Composer/Work-Full-Title:={COMPOSER_TITLE}"
-			call = baseurl + datatable + parameters + '&token=' + token
-			api_call(call,'Program - add Composer/Title Full',ID)
-
-
-			# CALL 5 (Notes, but only if the field is not blank)
-			if NOTES_XML != '':
-				# update program metadata
-				parameters = f"Documents.Virtual-folder.Program:Update?CoreField.Legacy-Identifier={ID}&NYP.Notes-on-program:={NOTES_XML}"
-				# parameters = quote(parameters)
+				# clear values from program folders
+				parameters = f"Documents.Virtual-folder.Program:Update?CoreField.Legacy-Identifier={ID}&NYP.Season--=&NYP.Program-Date(s)--=&NYP.Program-Times--=&NYP.Location--=&NYP.Venue--=&NYP.Event-Type--=&NYP.Soloist-/-Instrument--=&NYP.Composer/Work--="
 				call = baseurl + datatable + parameters + '&token=' + token
-				api_call(call,'Program - add Notes',ID)
-				if DEBUG == True:
-					logger.info(NOTES_XML)
+				api_call(call,'Program - clear old metadata',ID)
+				
+				# update program metadata with token as a parameter and dict as body
+				action = 'Documents.Virtual-folder.Program:Update'
+				params = {'token': token}
+				url = baseurl + datatable + action
+				api_call_ext(url,params,data,'Program - add new metadata',ID)
+
+				count += 1
+				percent = round(count/total, 2)*100
 
 	file.close()
 	logger.info('Done')
@@ -366,24 +363,35 @@ def add_sources_to_program(token):
 			api_call(call,'Program - add composers',Program_ID)
 	file.close()
 
-
+# do the API call
 def api_call(call,asset_type,ID):
-	if DEBUG != True:
-		try: 
-			response = requests.post(call)
+	try:
+		response = requests.post(call)
 
-			# If the response was successful, no Exception will be raised
-			response.raise_for_status()
-		except HTTPError as http_err:
-			logger.error(f'Failed to update {asset_type} {ID} - HTTP error occurred: {http_err}')
-		except Exception as err:
-			logger.error(f'Failed to update {asset_type} {ID} - Other error occurred: {err}')
-		else:
-			logger.info(f'Success updating {asset_type} {ID}')
-			return response
+		# If the response was successful, no Exception will be raised
+		response.raise_for_status()
+	except HTTPError as http_err:
+		logger.error(f'Failed to update {asset_type} {ID} - HTTP error occurred: {http_err}')
+	except Exception as err:
+		logger.error(f'Failed to update {asset_type} {ID} - Other error occurred: {err}')
 	else:
-		pass
+		logger.info(f'Success updating {asset_type} {ID}')
+		return response
 
+# API call with params and body
+def api_call_ext(url,params,data,asset_type,ID):
+	try:
+		response = requests.post(url, params=params, data=data)
+
+		# If the response was successful, no Exception will be raised
+		response.raise_for_status()
+	except HTTPError as http_err:
+		logger.error(f'Failed to update {asset_type} {ID} - HTTP error occurred: {http_err}')
+	except Exception as err:
+		logger.error(f'Failed to update {asset_type} {ID} - Other error occurred: {err}')
+	else:
+		logger.info(f'Success updating {asset_type} {ID}')
+		return response
 
 
 ############################
@@ -424,20 +432,19 @@ logger.addHandler(handler)
 logger.info('=======================')
 logger.info('Script started...')
 
+# update_list = ['7878','7877']
+
 # Run the auth function to get a token
 token = auth()
 
-# If DEBUG == True then no API update/create calls will be made
-DEBUG = False
-
 if token != '':
-	logger.info('🔑 We have a token! Proceeding...')
+	logger.info(f'🔑 We have a token: {token} Proceeding...')
 	print(f'Your token is: {token}')
 
 	make_folders(token)
 	update_folders(token)
-	create_sources(token)
-	add_sources_to_program(token)
+	# create_sources(token)
+	# add_sources_to_program(token)
 	
 	logger.info('ALL DONE! Bye 👋')
 
