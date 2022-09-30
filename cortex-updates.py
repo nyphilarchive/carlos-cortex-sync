@@ -180,7 +180,7 @@ def update_folders(token):
 				logger.info(f'Updating Program {count} of {total} = {percent}% complete')
 
 				# clear values from program folders
-				parameters = f"Documents.Virtual-folder.Program:Update?CoreField.Legacy-Identifier={ID}&NYP.Season--=&NYP.Program-Date(s)--=&NYP.Program-Times--=&NYP.Location--=&NYP.Venue--=&NYP.Event-Type--=&NYP.Soloist-/-Instrument--=&NYP.Composer/Work--="
+				parameters = f"Documents.Virtual-folder.Program:Update?CoreField.Legacy-Identifier={ID}&NYP.Season--=&NYP.Program-Date(s)--=&NYP.Program-Times--=&NYP.Location--=&NYP.Venue--=&NYP.Event-Type--=&NYP.Soloist-/-Instrument--=&NYP.Composer/Work--=&NYP.Soloist--=&NYP.Conductor--=&NYP.Composer--="
 				call = baseurl + datatable + parameters + '&token=' + token
 				api_call(call,'Program - clear old metadata',ID)
 				
@@ -316,11 +316,6 @@ def add_sources_to_program(token):
 			Program_ID = row[0]
 			Artist_ID = row[1]
 
-			# clear old values first
-			parameters = f"Documents.Virtual-folder.Program:Update?CoreField.Legacy-Identifier={Program_ID}&NYP.Soloist--="
-			call = baseurl + datatable + parameters + '&token=' + token
-			api_call(call,'Program - clear soloists',Program_ID)	
-
 			# add new values
 			parameters = f"Documents.Virtual-folder.Program:Update?CoreField.Legacy-Identifier={Program_ID}&NYP.Soloist+=[Contacts.Source.Default:CoreField.Artist-ID={Artist_ID}]"
 			call = baseurl + datatable + parameters + '&token=' + token
@@ -334,11 +329,6 @@ def add_sources_to_program(token):
 		for row in csvfile:
 			Program_ID = row[0]
 			Artist_ID = row[1]
-
-			# clear old values first
-			parameters = f"Documents.Virtual-folder.Program:Update?CoreField.Legacy-Identifier={Program_ID}&NYP.Conductor--="
-			call = baseurl + datatable + parameters + '&token=' + token
-			api_call(call,'Program - clear conductor',Program_ID)
 			
 			parameters = f"Documents.Virtual-folder.Program:Update?CoreField.Legacy-Identifier={Program_ID}&NYP.Conductor+=[Contacts.Source.Default:CoreField.Artist-ID={Artist_ID}]"
 			call = baseurl + datatable + parameters + '&token=' + token
@@ -352,11 +342,6 @@ def add_sources_to_program(token):
 		for row in csvfile:
 			Program_ID = row[0]
 			Composer_ID = row[1]
-
-			# clear old values first
-			parameters = f"Documents.Virtual-folder.Program:Update?CoreField.Legacy-Identifier={Program_ID}&NYP.Composer--="
-			call = baseurl + datatable + parameters + '&token=' + token
-			api_call(call,'Program - clear composers',Program_ID)
 	
 			parameters = f"Documents.Virtual-folder.Program:Update?CoreField.Legacy-Identifier={Program_ID}&NYP.Composer+=[Contacts.Source.Default:CoreField.Composer-ID={Composer_ID}]"
 			call = baseurl + datatable + parameters + '&token=' + token
@@ -441,10 +426,10 @@ if token != '':
 	logger.info(f'🔑 We have a token: {token} Proceeding...')
 	print(f'Your token is: {token}')
 
-	make_folders(token)
-	update_folders(token)
+	# make_folders(token)
+	# update_folders(token)
 	# create_sources(token)
-	# add_sources_to_program(token)
+	add_sources_to_program(token)
 	
 	logger.info('ALL DONE! Bye 👋')
 
