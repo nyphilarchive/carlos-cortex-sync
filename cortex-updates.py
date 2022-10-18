@@ -88,16 +88,15 @@ def make_folders(token):
 			program_id = row[1]
 			folder_name = row[2]
 			ordinal = row[3]
-
-			percent = round(count/total, 2)*100
 			
-			if ordinal == 'primary' and int(program_id) > 14736:
+			if ordinal == 'primary':
 				parameters = f"Documents.Virtual-folder.Program:CreateOrUpdate?CoreField.Legacy-Identifier={program_id}&CoreField.Title:={folder_name}&NYP.Program-ID:={program_id}&CoreField.visibility-class:=Internal use only&CoreField.Parent-folder:=[Documents.Virtual-folder.Program:CoreField.Unique-identifier={season_folder_id}]"
 				# parameters = quote(parameters)
 				call = baseurl + datatable + parameters + '&token=' + token
-				logger.info(f'Updating Program {count} of {total} -- {percent}%% complete')
+				logger.info(f'Updating Program {count} of {total} -- {percent}% complete')
 				api_call(call,'Program Folder',program_id)
 				count += 1
+				percent = round(count/total, 2)*100
 
 		# Now loop through again for secondary programs and assign them to the primary folders
 		for row in rows[1:]:
@@ -106,8 +105,6 @@ def make_folders(token):
 			folder_name = row[2]
 			ordinal = row[3]
 			parent_program = row[4]
-
-			percent = round(count/total, 2)*100
 
 			if ordinal == 'secondary':
 
@@ -121,6 +118,7 @@ def make_folders(token):
 				logger.info(f'Updating Program {count} of {total} -- {percent}% complete')
 				api_call(call,'Program Folder',program_id)
 				count +=1
+				percent = round(count/total, 2)*100
 
 	file.close()
 	logger.info('Done')
@@ -209,14 +207,13 @@ def update_folders(token):
 				# clear values from program folders
 				parameters = f"Documents.Virtual-folder.Program:Update?CoreField.Legacy-Identifier={ID}&NYP.Season--=&NYP.Program-Date(s)--=&NYP.Program-Times--=&NYP.Location--=&NYP.Venue--=&NYP.Event-Type--=&NYP.Soloist-/-Instrument--=&NYP.Composer/Work--=&NYP.Soloist--=&NYP.Conductor--=&NYP.Composer--="
 				call = baseurl + datatable + parameters + '&token=' + token
-				# api_call(call,'Program - clear old metadata',ID)
+				api_call(call,'Program - clear old metadata',ID)
 				
 				# update program metadata with token as a parameter and dict as body
 				action = 'Documents.Virtual-folder.Program:Update'
 				params = {'token': token}
 				url = baseurl + datatable + action
-				# api_call_ext(url,params,data,'Program - add new metadata',ID)
-				print(data)
+				api_call_ext(url,params,data,'Program - add new metadata',ID)
 
 				count += 1
 				percent = round(count/total, 2)*100
