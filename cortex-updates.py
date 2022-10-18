@@ -82,7 +82,6 @@ def make_folders(token):
 		# Loop through rows for primary folders first and make sure they're created
 		count = 1
 		total = len(rows[1:])
-		percent = round(count/total, 2)*100
 
 		for row in rows[1:]:
 			season_folder_id = row[0]
@@ -90,6 +89,8 @@ def make_folders(token):
 			folder_name = row[2]
 			ordinal = row[3]
 
+			percent = round(count/total, 2)*100
+			
 			if ordinal == 'primary' and int(program_id) > 14736:
 				parameters = f"Documents.Virtual-folder.Program:CreateOrUpdate?CoreField.Legacy-Identifier={program_id}&CoreField.Title:={folder_name}&NYP.Program-ID:={program_id}&CoreField.visibility-class:=Internal use only&CoreField.Parent-folder:=[Documents.Virtual-folder.Program:CoreField.Unique-identifier={season_folder_id}]"
 				# parameters = quote(parameters)
@@ -105,6 +106,8 @@ def make_folders(token):
 			folder_name = row[2]
 			ordinal = row[3]
 			parent_program = row[4]
+
+			percent = round(count/total, 2)*100
 
 			if ordinal == 'secondary':
 
