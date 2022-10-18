@@ -90,7 +90,7 @@ def make_folders(token):
 			folder_name = row[2]
 			ordinal = row[3]
 
-			if ordinal == 'primary':
+			if ordinal == 'primary' and int(program_id) > 14736:
 				parameters = f"Documents.Virtual-folder.Program:CreateOrUpdate?CoreField.Legacy-Identifier={program_id}&CoreField.Title:={folder_name}&NYP.Program-ID:={program_id}&CoreField.visibility-class:=Internal use only&CoreField.Parent-folder:=[Documents.Virtual-folder.Program:CoreField.Unique-identifier={season_folder_id}]"
 				# parameters = quote(parameters)
 				call = baseurl + datatable + parameters + '&token=' + token
@@ -152,6 +152,29 @@ def update_folders(token):
 			COMPOSER_TITLE_SHORT = row[12].replace('<','').replace('>','')
 			NOTES_XML = row[13].replace('<br>','\n')
 
+			# get the Digital Archives (Hadoop) ID from public Solr
+			lookup = f"http://proslrapp01.nyphil.live:9993/solr/assets/select?q=npp%5C%3AProgramID%3A{ID}&fl=id&wt=json"
+			try:
+				response = requests.get(lookup)
+				# If the response was successful, no Exception will be raised
+				response.raise_for_status()
+			except HTTPError as http_err:
+				logger.error(f'Failed to get Solr data for program {ID} - HTTP error occurred: {http_err}')
+			except Exception as err:
+				logger.error(f'Failed to get Solr data for program {ID} - Other error occurred: {err}')
+			else:
+				logger.info(f'Success retrieving Solr data for program {ID}')
+
+			if response:
+				# parse JSON results
+				response = response.json()
+				if response["response"]["numFound"] == 1:
+					digarch_id = response["response"]["docs"][0]["id"]
+				else:
+					digarch_id = ''
+			else:
+				digarch_id = ''
+
 			# if ID in update_list:
 			if ID !='':
 
@@ -170,7 +193,8 @@ def update_folders(token):
 					'NYP.Soloist-/-Instrument++': SOLOIST_SLASH_INSTRUMENT,
 					'NYP.Composer/Work++': COMPOSER_TITLE_SHORT,
 					'NYP.Composer/Work-Full-Title:': COMPOSER_TITLE,
-					'NYP.Notes-on-program:': NOTES_XML
+					'NYP.Notes-on-program:': NOTES_XML,
+					'NYP.Digital-Archives-ID:': digarch_id,
 				}
 				# fix for linebreaks and such - dump to string and load back to JSON
 				data = json.dumps(data)
@@ -182,13 +206,14 @@ def update_folders(token):
 				# clear values from program folders
 				parameters = f"Documents.Virtual-folder.Program:Update?CoreField.Legacy-Identifier={ID}&NYP.Season--=&NYP.Program-Date(s)--=&NYP.Program-Times--=&NYP.Location--=&NYP.Venue--=&NYP.Event-Type--=&NYP.Soloist-/-Instrument--=&NYP.Composer/Work--=&NYP.Soloist--=&NYP.Conductor--=&NYP.Composer--="
 				call = baseurl + datatable + parameters + '&token=' + token
-				api_call(call,'Program - clear old metadata',ID)
+				# api_call(call,'Program - clear old metadata',ID)
 				
 				# update program metadata with token as a parameter and dict as body
 				action = 'Documents.Virtual-folder.Program:Update'
 				params = {'token': token}
 				url = baseurl + datatable + action
-				api_call_ext(url,params,data,'Program - add new metadata',ID)
+				# api_call_ext(url,params,data,'Program - add new metadata',ID)
+				print(data)
 
 				count += 1
 				percent = round(count/total, 2)*100
@@ -426,9 +451,9 @@ if token != '':
 	logger.info(f'🔑 We have a token: {token} Proceeding...')
 	print(f'Your token is: {token}')
 
-	# make_folders(token)
-	# update_folders(token)
-	# create_sources(token)
+	make_folders(token)
+	update_folders(token)
+	create_sources(token)
 	add_sources_to_program(token)
 	
 	logger.info('ALL DONE! Bye 👋')
