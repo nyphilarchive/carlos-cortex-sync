@@ -82,7 +82,8 @@ def make_folders(token):
 		# Loop through rows for primary folders first and make sure they're created
 		count = 1
 		total = len(rows[1:])
-
+		percent = round(count/total, 2)*100
+		
 		for row in rows[1:]:
 			season_folder_id = row[0]
 			program_id = row[1]
