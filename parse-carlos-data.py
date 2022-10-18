@@ -6,8 +6,13 @@
 # by Bill Levay
 
 import sys, csv, json, re, os
+from dotenv import load_dotenv
 
-directory = '/mnt/x/CARLOS/CSV/'
+# First, grab the value for the Carlos export directory from the .env file in the same folder as this script
+dotenv_path = join(dirname(__file__), '.env')
+load_dotenv(dotenv_path)
+
+directory = os.environ.get('export', 'default')
 
 def make_folders(data,all_data):
 # create csv of virtual folder names
