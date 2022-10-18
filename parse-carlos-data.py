@@ -6,6 +6,7 @@
 # by Bill Levay
 
 import sys, csv, json, re, os
+from os.path import join, dirname
 from dotenv import load_dotenv
 
 # First, grab the value for the Carlos export directory from the .env file in the same folder as this script
