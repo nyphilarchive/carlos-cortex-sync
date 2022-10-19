@@ -82,8 +82,8 @@ def make_folders(token):
 		# Loop through rows for primary folders first and make sure they're created
 		count = 1
 		total = len(rows[1:])
-		percent = round(count/total, 2)*100
-		
+		percent = round(count/total, 4)*100
+
 		for row in rows[1:]:
 			season_folder_id = row[0]
 			program_id = row[1]
@@ -97,7 +97,7 @@ def make_folders(token):
 				logger.info(f'Updating Program {count} of {total} -- {percent}% complete')
 				api_call(call,'Program Folder',program_id)
 				count += 1
-				percent = round(count/total, 2)*100
+				percent = round(count/total, 4)*100
 
 		# Now loop through again for secondary programs and assign them to the primary folders
 		for row in rows[1:]:
@@ -119,7 +119,7 @@ def make_folders(token):
 				logger.info(f'Updating Program {count} of {total} -- {percent}% complete')
 				api_call(call,'Program Folder',program_id)
 				count +=1
-				percent = round(count/total, 2)*100
+				percent = round(count/total, 4)*100
 
 	file.close()
 	logger.info('Done')
@@ -136,7 +136,7 @@ def update_folders(token):
 		count = 1
 		records = list(csvfile)
 		total = len(records[1:])
-		percent = round(count/total, 2)*100
+		percent = round(count/total, 4)*100
 
 		for row in records[1:]:
 			ID = row[0]
@@ -217,7 +217,7 @@ def update_folders(token):
 				api_call_ext(url,params,data,'Program - add new metadata',ID)
 
 				count += 1
-				percent = round(count/total, 2)*100
+				percent = round(count/total, 4)*100
 
 	file.close()
 	logger.info('Done')
