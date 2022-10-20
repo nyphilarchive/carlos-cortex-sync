@@ -64,7 +64,8 @@ def auth():
 			token = ''
 			logger.error('⊗ Authentication failed')
 	else:
-		token = ''	
+		token = ''
+		logger.error('⊗ Authentication failed')	
 	return token
 
 
@@ -459,7 +460,7 @@ if token and token != '':
 	create_sources(token)
 	add_sources_to_program(token)
 	
-	logger.info('ALL DONE! Bye :)')
+	logger.info('ALL DONE! Bye bye :)')
 
 else:
-	logger.info('Goodbye')
+	logger.info('No API token :( Goodbye')
