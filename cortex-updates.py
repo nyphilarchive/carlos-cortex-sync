@@ -63,7 +63,9 @@ def auth():
 		else:
 			token = ''
 			logger.error('⊗ Authentication failed')
-		return token
+	else:
+		token = ''	
+	return token
 
 
 # create or update the program virtual folders
@@ -448,7 +450,7 @@ logger.info('Script started...')
 # Run the auth function to get a token
 token = auth()
 
-if token != '':
+if token and token != '':
 	logger.info(f'We have a token: {token} Proceeding...')
 	print(f'Your token is: {token}')
 
