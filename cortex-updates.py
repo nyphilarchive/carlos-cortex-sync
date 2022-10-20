@@ -49,7 +49,7 @@ def auth():
 	except Exception as err:
 		logger.error(f'Other error occurred: {err}')
 	else:
-		logger.info('✔️ Authentication successful')
+		logger.info('√ Authentication successful')
 
 	if response:
 		# logger.info(response.text)
@@ -62,7 +62,7 @@ def auth():
 			token = response_xml.find('APIResponse').find('Token').text
 		else:
 			token = ''
-			logger.error('❌ Authentication failed')
+			logger.error('⊗ Authentication failed')
 		return token
 
 
@@ -449,7 +449,7 @@ logger.info('Script started...')
 token = auth()
 
 if token != '':
-	logger.info(f'🔑 We have a token: {token} Proceeding...')
+	logger.info(f'We have a token: {token} Proceeding...')
 	print(f'Your token is: {token}')
 
 	make_folders(token)
@@ -457,7 +457,7 @@ if token != '':
 	create_sources(token)
 	add_sources_to_program(token)
 	
-	logger.info('ALL DONE! Bye 👋')
+	logger.info('ALL DONE! Bye :)')
 
 else:
 	logger.info('Goodbye')
