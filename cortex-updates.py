@@ -49,7 +49,7 @@ def auth():
 	except Exception as err:
 		logger.error(f'Other error occurred: {err}')
 	else:
-		logger.info('√ Authentication successful')
+		logger.info('Authentication successful')
 
 	if response:
 		# logger.info(response.text)
@@ -62,10 +62,10 @@ def auth():
 			token = response_xml.find('APIResponse').find('Token').text
 		else:
 			token = ''
-			logger.error('⊗ Authentication failed')
+			logger.error('Authentication failed')
 	else:
 		token = ''
-		logger.error('⊗ Authentication failed')	
+		logger.error('Authentication failed')	
 	return token
 
 
