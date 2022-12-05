@@ -84,7 +84,6 @@ def make_folders(token):
 		percent = round(count/total, 4)*100
 
 		for row in rows[1:]:
-			print(row)
 			season_folder_id = row[0]
 			program_id = row[1]
 			folder_name = row[2]
@@ -114,6 +113,8 @@ def make_folders(token):
 				# save it back to the list for future use
 				row.append(existing_parent_id)
 			else:
+				existing_parent_id = ''
+				row.append(existing_parent_id)
 				logger.warning(f'Unable to find Program ID {program_id}')
 
 			# Do another Search query to get the legacy identifier of the existing parent
