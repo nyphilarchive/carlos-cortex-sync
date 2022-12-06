@@ -147,7 +147,6 @@ def make_folders(token):
 			"""
 			if existing_parent_id == season_folder_id:
 				update_parent = ''
-				logger.info("Parent folders match -- no need to update this field")
 			else:
 				update_parent = f'&CoreField.Parent-folder:=[Documents.Virtual-folder.Program:CoreField.Unique-identifier={season_folder_id}]'
 
@@ -380,7 +379,7 @@ def create_sources(token):
 				if response_data is not None and response_data['ResponseSummary']['TotalItemCount'] > 0:
 					existing_roles = response_data['Response'][0]['CoreField.Role']
 					if existing_roles is not None:
-						ROLES = existing_roles.split('|')
+						existing_roles = existing_roles.split('|')
 					else:
 						existing_roles = []
 
@@ -537,8 +536,8 @@ if token and token != '':
 	logger.info(f'We have a token: {token} Proceeding...')
 	print(f'Your token is: {token}')
 
-	make_folders(token)
-	update_folders(token)
+	# make_folders(token)
+	# update_folders(token)
 	create_sources(token)
 	add_sources_to_program(token)
 	
