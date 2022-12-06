@@ -292,7 +292,7 @@ def update_folders(token):
 				action = 'Documents.Virtual-folder.Program:Update'
 				params = {'token': token}
 				url = baseurl + datatable + action
-				api_call(url,params,data,'Program - add new metadata',ID)
+				api_call(url,'Program - add new metadata',ID,params,data)
 
 				count += 1
 				percent = round(count/total, 4)*100
@@ -327,7 +327,7 @@ def create_sources(token):
 			# So we'll do a Read for each Source, grab the Role field, then add any new values to it
 			parameters = f'Contacts.Source.Default:Read?CoreField.Composer-ID={COMPOSER_ID}&format=json'
 			query = baseurl + datatable + parameters + '&token=' + token
-			api_call(query,'Getting Roles for Composer',COMPOSER_ID)
+			response = api_call(query,'Getting Roles for Composer',COMPOSER_ID)
 
 			if response:
 				response_data = response.json()
@@ -373,7 +373,7 @@ def create_sources(token):
 			# So we'll do a Read for each Source, grab the Role field, then add any new values to it
 			parameters = f'Contacts.Source.Default:Read?CoreField.Artist-ID={ARTIST_ID}&format=json'
 			query = baseurl + datatable + parameters + '&token=' + token
-			api_call(query,'Getting Roles for Composer',ARTIST_ID)
+			response = api_call(query,'Getting Roles for Composer',ARTIST_ID)
 
 			if response:
 				response_data = response.json()
@@ -444,7 +444,7 @@ def add_sources_to_program(token):
 			api_call(call,'Program - add composers',Program_ID)
 	file.close()
 
-def api_call(url, params=None, data=None, asset_type, ID):
+def api_call(url, asset_type, ID, params=None, data=None):
     # Set the maximum number of attempts to make the call
     max_attempts = 2
 
