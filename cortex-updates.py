@@ -530,9 +530,9 @@ if token and token != '':
 	print(f'Your token is: {token}')
 
 	make_folders(token)
-	# update_folders(token)
-	# create_sources(token)
-	# add_sources_to_program(token)
+	update_folders(token)
+	create_sources(token)
+	add_sources_to_program(token)
 	
 	logger.info('ALL DONE! Bye bye :)')
 
