@@ -110,12 +110,12 @@ def make_folders(token):
 				else:
 					# We have no result, or more than one parent, so we'll assign the parent from the CSV as usual
 					existing_parent_id = ''
-				# save it back to the list for future use
-				row.append(existing_parent_id)
 			else:
 				existing_parent_id = ''
-				row.append(existing_parent_id)
 				logger.warning(f'Unable to find Program ID {program_id}')
+
+			# save existing_parent_id back to the list for future use
+			row.append(existing_parent_id)
 
 			# Do another Search query to get the legacy identifier of the existing parent
 			parameters = f'CoreField.Unique-Identifier:{existing_parent_id}&fields=MediaNumber&format=json'
@@ -134,10 +134,12 @@ def make_folders(token):
 				else:
 					# We have no result, or more than one parent, so we'll assign the parent from the CSV as usual
 					existing_parent_legacy_id = ''
-				# save it back to the list for future use
-				row.append(existing_parent_legacy_id)
 			else:
 				logger.warning(f'Unable to find Program ID {program_id}')
+				existing_parent_legacy_id = ''
+
+			# save it back to the list for future use
+			row.append(existing_parent_legacy_id)
 
 			"""
 			Now we can compare the parent_id from Cortex to the CSV
