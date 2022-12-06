@@ -189,7 +189,6 @@ def make_folders(token):
 					if existing_parent_id == season_folder_id:
 						# if they match, don't update this field
 						update_parent = ''
-						logger.info("Parent folders match -- no need to update this field")
 					else:
 						update_parent = f'&CoreField.Parent-folder:=[Documents.Virtual-folder.Program:CoreField.Unique-identifier={season_folder_id}]' 
 					parameters = f"Documents.Virtual-folder.Program:CreateOrUpdate?CoreField.Legacy-Identifier={program_id}&CoreField.Title:={folder_name}&NYP.Program-ID:={program_id}&CoreField.visibility-class:=Internal use only{update_parent}"
@@ -293,7 +292,7 @@ def update_folders(token):
 				action = 'Documents.Virtual-folder.Program:Update'
 				params = {'token': token}
 				url = baseurl + datatable + action
-				api_call_ext(url,params,data,'Program - add new metadata',ID)
+				api_call(url,params,data,'Program - add new metadata',ID)
 
 				count += 1
 				percent = round(count/total, 4)*100
@@ -328,15 +327,12 @@ def create_sources(token):
 			# So we'll do a Read for each Source, grab the Role field, then add any new values to it
 			parameters = f'Contacts.Source.Default:Read?CoreField.Composer-ID={COMPOSER_ID}&format=json'
 			query = baseurl + datatable + parameters + '&token=' + token
-			try:
-				r = requests.get(query)
-			except:
-				logger.warning(f'Unable to get Composer ID {COMPOSER_ID}')
-				pass
-			if r:
-				r_data = r.json()
-				if r_data is not None and r_data['Response'] is not None:
-					existing_roles = r_data['Response'][0]['CoreField.Role']
+			api_call(query,'Getting Roles for Composer',COMPOSER_ID)
+
+			if response:
+				response_data = response.json()
+				if response_data is not None and response_data['ResponseSummary']['TotalItemCount'] > 0:
+					existing_roles = response_data['Response'][0]['CoreField.Role']
 					if existing_roles is not None:
 						ROLES = existing_roles.split('|')
 
@@ -377,15 +373,12 @@ def create_sources(token):
 			# So we'll do a Read for each Source, grab the Role field, then add any new values to it
 			parameters = f'Contacts.Source.Default:Read?CoreField.Artist-ID={ARTIST_ID}&format=json'
 			query = baseurl + datatable + parameters + '&token=' + token
-			try:
-				r = requests.get(query)
-			except:
-				logger.warning(f'Unable to get Artist ID {ARTIST_ID}')
-				pass
-			if r:
-				r_data = r.json()
-				if r_data is not None and r_data['Response'] is not None:
-					existing_roles = r_data['Response'][0]['CoreField.Role']
+			api_call(query,'Getting Roles for Composer',ARTIST_ID)
+
+			if response:
+				response_data = response.json()
+				if response_data is not None and response_data['ResponseSummary']['TotalItemCount'] > 0:
+					existing_roles = response_data['Response'][0]['CoreField.Role']
 					if existing_roles is not None:
 						ROLES = existing_roles.split('|')
 					else:
@@ -451,35 +444,50 @@ def add_sources_to_program(token):
 			api_call(call,'Program - add composers',Program_ID)
 	file.close()
 
-# do the API call
-def api_call(call,asset_type,ID):
-	try:
-		response = requests.post(call)
+def api_call(url, params=None, data=None, asset_type, ID):
+    # Set the maximum number of attempts to make the call
+    max_attempts = 2
 
-		# If the response was successful, no Exception will be raised
-		response.raise_for_status()
-	except HTTPError as http_err:
-		logger.error(f'Failed to update {asset_type} {ID} - HTTP error occurred: {http_err}')
-	except Exception as err:
-		logger.error(f'Failed to update {asset_type} {ID} - Other error occurred: {err}')
-	else:
-		logger.info(f'Success updating {asset_type} {ID}')
-		return response
+    # Set the initial number of attempts to 0
+    attempts = 0
 
-# API call with params and body
-def api_call_ext(url,params,data,asset_type,ID):
-	try:
-		response = requests.post(url, params=params, data=data)
+    # Set a flag to indicate whether the call was successful
+    success = False
 
-		# If the response was successful, no Exception will be raised
-		response.raise_for_status()
-	except HTTPError as http_err:
-		logger.error(f'Failed to update {asset_type} {ID} - HTTP error occurred: {http_err}')
-	except Exception as err:
-		logger.error(f'Failed to update {asset_type} {ID} - Other error occurred: {err}')
-	else:
-		logger.info(f'Success updating {asset_type} {ID}')
-		return response
+    # Continue making the call until it is successful, or until the maximum number of attempts has been reached
+    while not success and attempts < max_attempts:
+        try:
+            # Import the requests module
+            import requests
+
+            # Make the API call with the provided params and data
+            response = requests.post(url, params=params, data=data)
+
+            # If the response was successful, no Exception will be raised
+            response.raise_for_status()
+
+            # If no exceptions were raised, the call was successful
+            success = True
+        except ImportError as import_err:
+            # Handle errors that occur when importing the requests module
+            logger.error(f'Failed to import the requests module: {import_err}')
+        except HTTPError as http_err:
+            # Handle HTTP errors
+            logger.error(f'Failed: {asset_type} {ID} - HTTP error occurred: {http_err}')
+
+            # Increment the number of attempts
+            attempts += 1
+
+            # If the maximum number of attempts has been reached, raise an exception to stop the loop
+            if attempts >= max_attempts:
+                raise
+        except Exception as err:
+            # Handle all other errors
+            logger.error(f'Failed: {asset_type} {ID} - Other error occurred: {err}')
+
+    # If the loop exited successfully, the call was successful
+    logger.info(f'Success: {asset_type} {ID}')
+    return response
 
 
 ############################
