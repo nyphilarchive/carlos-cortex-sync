@@ -372,7 +372,7 @@ def create_sources(token):
 			# So we'll do a Read for each Source, grab the Role field, then add any new values to it
 			parameters = f'Contacts.Source.Default:Read?CoreField.Artist-ID={ARTIST_ID}&format=json'
 			query = baseurl + datatable + parameters + '&token=' + token
-			response = api_call(query,'Getting Roles for Composer',ARTIST_ID)
+			response = api_call(query,'Getting Roles for Artist',ARTIST_ID)
 
 			if response:
 				response_data = response.json()
