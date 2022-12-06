@@ -24,11 +24,7 @@ def make_folders(data,all_data):
 
 	# get the list of Season folders and their Cortex IDs
 	season_file = csv.DictReader(open(directory+'cortex-seasons.csv'))
-	seasons = {}
-	for row in season_file:
-		season = row['season']
-		season_id = row['id']
-		seasons[season] = season_id
+	seasons = {row['season']: row['id'] for row in season_file}
 
 	# set up the folder list
 	folders = []
@@ -71,7 +67,7 @@ def make_folders(data,all_data):
 				conductor = ' / ' + conductor.strip()
 
 			# clean up sub event
-			sub_event = data[program]['SUB_EVENT_NAMES'].split('|')[0].replace('Subscription Season', 'Sub').replace('Non-Subscription', 'Non-Sub')
+			sub_event = data[program]['SUB_EVENT_NAMES'].split('|')[0].replace('Subscription Season', 'Sub').replace('Non-Subscription', 'Non-Sub').strip()
 			if sub_event != '':
 				sub_event = ' / ' + sub_event
 

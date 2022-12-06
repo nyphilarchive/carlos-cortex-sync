@@ -1,23 +1,23 @@
-# Keep Cortex/OrangeDAM synced with Carlos metadata updates
-#
-# This script will read various CSVs and execute the appropriate API calls to create or update records
-#
-# by Bill Levay
-#
-# Make sure you have an .env file in this directory that looks like this:
-# login=yourlogin
-# password=yourpassword
-# directory=/location/of/csvs/
-# logs=/location/for/logs/
-# baseurl=https://mydomain.org
-# datatable=/API/DataTable/v2.2/
-################################
+"""
+Keep Cortex/OrangeDAM synced with Carlos metadata updates
+
+This script will read various CSVs and execute the appropriate API calls to create or update records
+
+by Bill Levay
+
+Make sure you have an .env file in this directory that looks like this:
+ login=yourCortexLogin
+ password=yourCortexPassword
+ directory=/location/of/csvs/
+ logs=/location/for/logs/
+ baseurl=https://mydomain.org
+ datatable=/API/DataTable/v2.2/
+"""
 
 import requests, csv, sys, os, time, datetime, logging, json
 from urllib.parse import quote
 from os.path import join, dirname
 from requests.exceptions import HTTPError
-import xml.etree.ElementTree as ET
 from dotenv import load_dotenv
 
 
@@ -37,7 +37,7 @@ datatable = os.environ.get('datatable', 'default')
 # get a new token from the Login API
 def auth():
 
-	auth_string = f"/API/Authentication/v1.0/Login?Login={login}&Password={password}"
+	auth_string = f"/API/Authentication/v1.0/Login?Login={login}&Password={password}&format=json"
 
 	# send the POST request
 	try:
@@ -52,14 +52,10 @@ def auth():
 		logger.info('Authentication successful')
 
 	if response:
-		# logger.info(response.text)
-
-		# parse the XML response
-		response_string = response.content
-		response_xml = ET.fromstring(response_string)
-		code = response_xml.find('APIResponse').find('Code')
-		if code.text == 'SUCCESS':
-			token = response_xml.find('APIResponse').find('Token').text
+		# parse the JSON response
+		json_data = response.json()
+		if json_data['APIResponse']['Code'] == 'SUCCESS':
+			token = json_data['APIResponse']['Token']
 		else:
 			token = ''
 			logger.error('Authentication failed')
@@ -92,15 +88,78 @@ def make_folders(token):
 			program_id = row[1]
 			folder_name = row[2]
 			ordinal = row[3]
-			
+
+			"""
+			See if this folder already exists in Cortex and what the parent folder is
+			If the folder exists and the existing parent is the same as the parent in the CSV, we can skip that parameter in the API call
+			This will prevent Cortex from changing the order of the folder in the application's Browser sidepanel
+			"""
+			parameters = f'CoreField.Legacy-Identifier:{program_id} DocSubType:Program&fields=Document.ParentIdentifier&format=json'
+			query = f'{baseurl}/API/search/v3.0/search?query={parameters}&token={token}'
+			try:
+				r = requests.get(query)
+			except:
+				logger.warning(f'Unable to find Program ID {program_id}')
+				pass
+
+			if r:
+				r_data = r.json()
+				if r_data['APIResponse']['GlobalInfo']['TotalCount'] == 1:
+					# We got one result, which is good
+					existing_parent_id = r_data['APIResponse']['Items'][0]["Document.ParentIdentifier"]
+				else:
+					# We have no result, or more than one parent, so we'll assign the parent from the CSV as usual
+					existing_parent_id = ''
+			else:
+				existing_parent_id = ''
+				logger.warning(f'Unable to find Program ID {program_id}')
+
+			# save existing_parent_id back to the list for future use
+			row.append(existing_parent_id)
+
+			# Do another Search query to get the legacy identifier of the existing parent
+			parameters = f'CoreField.Unique-Identifier:{existing_parent_id}&fields=MediaNumber&format=json'
+			query = f'{baseurl}/API/search/v3.0/search?query={parameters}&token={token}'
+			try:
+				r = requests.get(query)
+			except:
+				logger.warning(f'Unable to find Program ID {program_id}')
+				pass
+
+			if r:
+				r_data = r.json()
+				if r_data['APIResponse']['GlobalInfo']['TotalCount'] == 1:
+					# We got one result, which is good
+					existing_parent_legacy_id = r_data['APIResponse']['Items'][0]["MediaNumber"]
+				else:
+					# We have no result, or more than one parent, so we'll assign the parent from the CSV as usual
+					existing_parent_legacy_id = ''
+			else:
+				logger.warning(f'Unable to find Program ID {program_id}')
+				existing_parent_legacy_id = ''
+
+			# save it back to the list for future use
+			row.append(existing_parent_legacy_id)
+
+			"""
+			Now we can compare the parent_id from Cortex to the CSV
+			If the values match, do not update this field
+			"""
+			if existing_parent_id == season_folder_id:
+				update_parent = ''
+			else:
+				update_parent = f'&CoreField.Parent-folder:=[Documents.Virtual-folder.Program:CoreField.Unique-identifier={season_folder_id}]'
+
+			# loop through only the Primary programs
 			if ordinal == 'primary':
-				parameters = f"Documents.Virtual-folder.Program:CreateOrUpdate?CoreField.Legacy-Identifier={program_id}&CoreField.Title:={folder_name}&NYP.Program-ID:={program_id}&CoreField.visibility-class:=Internal use only&CoreField.Parent-folder:=[Documents.Virtual-folder.Program:CoreField.Unique-identifier={season_folder_id}]"
+				parameters = f"Documents.Virtual-folder.Program:CreateOrUpdate?CoreField.Legacy-Identifier={program_id}&CoreField.Title:={folder_name}&NYP.Program-ID:={program_id}&CoreField.visibility-class:=Internal use only{update_parent}"
 				# parameters = quote(parameters)
 				call = baseurl + datatable + parameters + '&token=' + token
 				logger.info(f'Updating Program {count} of {total} -- {percent}% complete')
 				api_call(call,'Program Folder',program_id)
 				count += 1
 				percent = round(count/total, 4)*100
+
 
 		# Now loop through again for secondary programs and assign them to the primary folders
 		for row in rows[1:]:
@@ -109,14 +168,29 @@ def make_folders(token):
 			folder_name = row[2]
 			ordinal = row[3]
 			parent_program = row[4]
+			existing_parent_id = row[5]
+			existing_parent_legacy_id = row[6]
 
 			if ordinal == 'secondary':
 
 				# check if there's a value for parent_program... if not, kick it back up to the season level
 				if parent_program != '':
-					parameters = f"Documents.Virtual-folder.Program:CreateOrUpdate?CoreField.Legacy-Identifier={program_id}&CoreField.Title:={folder_name}&NYP.Program-ID:={program_id}&CoreField.visibility-class:=Internal use only&CoreField.Parent-folder:=[Documents.Virtual-folder.Program:CoreField.Legacy-Identifier={parent_program}]"
+					# check if the parent folder from the CSV matches the existing one
+					if parent_program == existing_parent_legacy_id:
+						# if they match, don't update this field
+						update_parent = ''
+						logger.info("Parent folders match -- no need to update this field")
+					else:
+						update_parent = f'&CoreField.Parent-folder:=[Documents.Virtual-folder.Program:CoreField.Legacy-Identifier={parent_program}]'
+					parameters = f"Documents.Virtual-folder.Program:CreateOrUpdate?CoreField.Legacy-Identifier={program_id}&CoreField.Title:={folder_name}&NYP.Program-ID:={program_id}&CoreField.visibility-class:=Internal use only{update_parent}"
 				else:
-					parameters = f"Documents.Virtual-folder.Program:CreateOrUpdate?CoreField.Legacy-Identifier={program_id}&CoreField.Title:={folder_name}&NYP.Program-ID:={program_id}&CoreField.visibility-class:=Internal use only&CoreField.Parent-folder:=[Documents.Virtual-folder.Program:CoreField.Unique-identifier={season_folder_id}]"
+					# check if the parent folder from the CSV matches the existing one
+					if existing_parent_id == season_folder_id:
+						# if they match, don't update this field
+						update_parent = ''
+					else:
+						update_parent = f'&CoreField.Parent-folder:=[Documents.Virtual-folder.Program:CoreField.Unique-identifier={season_folder_id}]' 
+					parameters = f"Documents.Virtual-folder.Program:CreateOrUpdate?CoreField.Legacy-Identifier={program_id}&CoreField.Title:={folder_name}&NYP.Program-ID:={program_id}&CoreField.visibility-class:=Internal use only{update_parent}"
 
 				call = baseurl + datatable + parameters + '&token=' + token
 				logger.info(f'Updating Program {count} of {total} -- {percent}% complete')
@@ -217,7 +291,7 @@ def update_folders(token):
 				action = 'Documents.Virtual-folder.Program:Update'
 				params = {'token': token}
 				url = baseurl + datatable + action
-				api_call_ext(url,params,data,'Program - add new metadata',ID)
+				api_call(url,'Program - add new metadata',ID,params,data)
 
 				count += 1
 				percent = round(count/total, 4)*100
@@ -250,20 +324,16 @@ def create_sources(token):
 
 			# We want to preserve the Role field for our Source, which may have other data
 			# So we'll do a Read for each Source, grab the Role field, then add any new values to it
-			parameters = f'Contacts.Source.Default:Read?CoreField.Composer-ID={COMPOSER_ID}'
+			parameters = f'Contacts.Source.Default:Read?CoreField.Composer-ID={COMPOSER_ID}&format=json'
 			query = baseurl + datatable + parameters + '&token=' + token
-			try:
-				r = requests.get(query)
-			except:
-				logger.warning(f'Unable to get Composer ID {COMPOSER_ID}')
-				pass
-			if r:
-				r_string = r.content
-				r_xml = ET.fromstring(r_string)
-				if r_xml is not None and r_xml.find('Response').text is not None:
-					ROLES_xml = r_xml.find('Response').find('Record').find('CoreField.Role')
-					if ROLES_xml is not None:
-						ROLES = ROLES_xml.text.split('|')
+			response = api_call(query,'Getting Roles for Composer',COMPOSER_ID)
+
+			if response:
+				response_data = response.json()
+				if response_data is not None and response_data['ResponseSummary']['TotalItemCount'] > 0:
+					existing_roles = response_data['Response'][0]['CoreField.Role']
+					if existing_roles is not None:
+						ROLES = existing_roles.split('|')
 
 			if 'Composer' not in ROLES:
 				ROLES.append('Composer')
@@ -300,20 +370,16 @@ def create_sources(token):
 
 			# We want to preserve the Role field for our Source, which may have other data
 			# So we'll do a Read for each Source, grab the Role field, then add any new values to it
-			parameters = f'Contacts.Source.Default:Read?CoreField.Artist-ID={ARTIST_ID}'
+			parameters = f'Contacts.Source.Default:Read?CoreField.Artist-ID={ARTIST_ID}&format=json'
 			query = baseurl + datatable + parameters + '&token=' + token
-			try:
-				r = requests.get(query)
-			except:
-				logger.warning(f'Unable to get Artist ID {ARTIST_ID}')
-				pass
-			if r:
-				r_string = r.content
-				r_xml = ET.fromstring(r_string)
-				if r_xml is not None and r_xml.find('Response').text is not None:
-					existing_roles_xml = r_xml.find('Response').find('Record').find('CoreField.Role')
-					if existing_roles_xml is not None:
-						existing_roles = existing_roles_xml.text.split('|')
+			response = api_call(query,'Getting Roles for Artist',ARTIST_ID)
+
+			if response:
+				response_data = response.json()
+				if response_data is not None and response_data['ResponseSummary']['TotalItemCount'] > 0:
+					existing_roles = response_data['Response'][0]['CoreField.Role']
+					if existing_roles is not None:
+						existing_roles = existing_roles.split('|')
 					else:
 						existing_roles = []
 
@@ -377,35 +443,50 @@ def add_sources_to_program(token):
 			api_call(call,'Program - add composers',Program_ID)
 	file.close()
 
-# do the API call
-def api_call(call,asset_type,ID):
-	try:
-		response = requests.post(call)
+def api_call(url, asset_type, ID, params=None, data=None):
+    # Set the maximum number of attempts to make the call
+    max_attempts = 2
 
-		# If the response was successful, no Exception will be raised
-		response.raise_for_status()
-	except HTTPError as http_err:
-		logger.error(f'Failed to update {asset_type} {ID} - HTTP error occurred: {http_err}')
-	except Exception as err:
-		logger.error(f'Failed to update {asset_type} {ID} - Other error occurred: {err}')
-	else:
-		logger.info(f'Success updating {asset_type} {ID}')
-		return response
+    # Set the initial number of attempts to 0
+    attempts = 0
 
-# API call with params and body
-def api_call_ext(url,params,data,asset_type,ID):
-	try:
-		response = requests.post(url, params=params, data=data)
+    # Set a flag to indicate whether the call was successful
+    success = False
 
-		# If the response was successful, no Exception will be raised
-		response.raise_for_status()
-	except HTTPError as http_err:
-		logger.error(f'Failed to update {asset_type} {ID} - HTTP error occurred: {http_err}')
-	except Exception as err:
-		logger.error(f'Failed to update {asset_type} {ID} - Other error occurred: {err}')
-	else:
-		logger.info(f'Success updating {asset_type} {ID}')
-		return response
+    # Continue making the call until it is successful, or until the maximum number of attempts has been reached
+    while not success and attempts < max_attempts:
+        try:
+            # Import the requests module
+            import requests
+
+            # Make the API call with the provided params and data
+            response = requests.post(url, params=params, data=data)
+
+            # If the response was successful, no Exception will be raised
+            response.raise_for_status()
+
+            # If no exceptions were raised, the call was successful
+            success = True
+        except ImportError as import_err:
+            # Handle errors that occur when importing the requests module
+            logger.error(f'Failed to import the requests module: {import_err}')
+        except HTTPError as http_err:
+            # Handle HTTP errors
+            logger.error(f'Failed: {asset_type} {ID} - HTTP error occurred: {http_err}')
+
+            # Increment the number of attempts
+            attempts += 1
+
+            # If the maximum number of attempts has been reached, raise an exception to stop the loop
+            if attempts >= max_attempts:
+                raise
+        except Exception as err:
+            # Handle all other errors
+            logger.error(f'Failed: {asset_type} {ID} - Other error occurred: {err}')
+
+    # If the loop exited successfully, the call was successful
+    logger.info(f'Success: {asset_type} {ID}')
+    return response
 
 
 ############################
@@ -455,8 +536,8 @@ if token and token != '':
 	logger.info(f'We have a token: {token} Proceeding...')
 	print(f'Your token is: {token}')
 
-	make_folders(token)
-	update_folders(token)
+	# make_folders(token)
+	# update_folders(token)
 	create_sources(token)
 	add_sources_to_program(token)
 	
