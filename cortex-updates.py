@@ -331,8 +331,8 @@ def create_sources(token):
 			if response:
 				response_data = response.json()
 				if response_data is not None and response_data['ResponseSummary']['TotalItemCount'] > 0:
-					existing_roles = response_data['Response'][0]['CoreField.Role']
-					if existing_roles is not None:
+					existing_roles = response_data['Response'][0].get('CoreField.Role')
+					if existing_roles:
 						ROLES = existing_roles.split('|')
 
 			if 'Composer' not in ROLES:
@@ -376,9 +376,9 @@ def create_sources(token):
 
 			if response:
 				response_data = response.json()
-				if response_data is not None and response_data['ResponseSummary']['TotalItemCount'] > 0 and response_data['Response'][0]['CoreField.Role']:
-					existing_roles = response_data['Response'][0]['CoreField.Role']
-					if existing_roles is not None:
+				if response_data is not None and response_data['ResponseSummary']['TotalItemCount'] > 0:
+					existing_roles = response_data['Response'][0].get('CoreField.Role')
+					if existing_roles:
 						existing_roles = existing_roles.split('|')
 					else:
 						existing_roles = []
