@@ -414,7 +414,7 @@ def add_sources_to_program(token):
 			# add new values
 			parameters = f"Documents.Virtual-folder.Program:Update?CoreField.Legacy-Identifier={Program_ID}&NYP.Soloist+=[Contacts.Source.Default:CoreField.Artist-ID={Artist_ID}]"
 			call = baseurl + datatable + parameters + '&token=' + token
-			api_call(call,'Program - add soloists',Program_ID)
+			api_call(call,f'Add soloist {Artist_ID} to Program',Program_ID)
 	file.close()
 
 	with open(directory+'conductors.csv', 'r') as file:
@@ -427,7 +427,7 @@ def add_sources_to_program(token):
 			
 			parameters = f"Documents.Virtual-folder.Program:Update?CoreField.Legacy-Identifier={Program_ID}&NYP.Conductor+=[Contacts.Source.Default:CoreField.Artist-ID={Artist_ID}]"
 			call = baseurl + datatable + parameters + '&token=' + token
-			api_call(call,'Program - add conductor',Program_ID)
+			api_call(call,f'Add conductor {Artist_ID} to Program',Program_ID)
 	file.close()
 
 	with open(directory+'composers.csv', 'r') as file:
@@ -440,7 +440,7 @@ def add_sources_to_program(token):
 	
 			parameters = f"Documents.Virtual-folder.Program:Update?CoreField.Legacy-Identifier={Program_ID}&NYP.Composer+=[Contacts.Source.Default:CoreField.Composer-ID={Composer_ID}]"
 			call = baseurl + datatable + parameters + '&token=' + token
-			api_call(call,'Program - add composers',Program_ID)
+			api_call(call,f'Add composer {Composer_ID} to Program',Program_ID)
 	file.close()
 
 def api_call(url, asset_type, ID, params=None, data=None):
