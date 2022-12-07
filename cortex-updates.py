@@ -376,7 +376,7 @@ def create_sources(token):
 
 			if response:
 				response_data = response.json()
-				if response_data is not None and response_data['ResponseSummary']['TotalItemCount'] > 0:
+				if response_data is not None and response_data['ResponseSummary']['TotalItemCount'] > 0 and response_data['Response'][0]['CoreField.Role']:
 					existing_roles = response_data['Response'][0]['CoreField.Role']
 					if existing_roles is not None:
 						existing_roles = existing_roles.split('|')
