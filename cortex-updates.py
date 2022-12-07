@@ -536,8 +536,8 @@ if token and token != '':
 	logger.info(f'We have a token: {token} Proceeding...')
 	print(f'Your token is: {token}')
 
-	# make_folders(token)
-	# update_folders(token)
+	make_folders(token)
+	update_folders(token)
 	create_sources(token)
 	add_sources_to_program(token)
 	
