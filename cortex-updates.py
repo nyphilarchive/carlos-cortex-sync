@@ -479,7 +479,8 @@ def api_call(url, asset_type, ID, params=None, data=None):
 
             # If the maximum number of attempts has been reached, raise an exception to stop the loop
             if attempts >= max_attempts:
-                raise
+            	# raise
+                pass
         except Exception as err:
             # Handle all other errors
             logger.error(f'Failed: {asset_type} {ID} - Other error occurred: {err}')
