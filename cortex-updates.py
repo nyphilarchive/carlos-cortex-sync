@@ -152,7 +152,7 @@ def make_folders(token):
 
 			# loop through only the Primary programs
 			if ordinal == 'primary':
-				parameters = f"Documents.Virtual-folder.Program:CreateOrUpdate?CoreField.Legacy-Identifier={program_id}&CoreField.Title:={folder_name}&NYP.Program-ID:={program_id}&CoreField.visibility-class:=Internal use only{update_parent}"
+				parameters = f"Documents.Virtual-folder.Program:CreateOrUpdate?CoreField.Legacy-Identifier={program_id}&CoreField.Title:={folder_name}&NYP.Program-ID:={program_id}&CoreField.visibility-class:=Public{update_parent}"
 				# parameters = quote(parameters)
 				call = baseurl + datatable + parameters + '&token=' + token
 				logger.info(f'Updating Program {count} of {total} -- {percent}% complete')
@@ -182,7 +182,7 @@ def make_folders(token):
 						logger.info("Parent folders match -- no need to update this field")
 					else:
 						update_parent = f'&CoreField.Parent-folder:=[Documents.Virtual-folder.Program:CoreField.Legacy-Identifier={parent_program}]'
-					parameters = f"Documents.Virtual-folder.Program:CreateOrUpdate?CoreField.Legacy-Identifier={program_id}&CoreField.Title:={folder_name}&NYP.Program-ID:={program_id}&CoreField.visibility-class:=Internal use only{update_parent}"
+					parameters = f"Documents.Virtual-folder.Program:CreateOrUpdate?CoreField.Legacy-Identifier={program_id}&CoreField.Title:={folder_name}&NYP.Program-ID:={program_id}&CoreField.visibility-class:=Public{update_parent}"
 				else:
 					# check if the parent folder from the CSV matches the existing one
 					if existing_parent_id == season_folder_id:
@@ -190,7 +190,7 @@ def make_folders(token):
 						update_parent = ''
 					else:
 						update_parent = f'&CoreField.Parent-folder:=[Documents.Virtual-folder.Program:CoreField.Unique-identifier={season_folder_id}]' 
-					parameters = f"Documents.Virtual-folder.Program:CreateOrUpdate?CoreField.Legacy-Identifier={program_id}&CoreField.Title:={folder_name}&NYP.Program-ID:={program_id}&CoreField.visibility-class:=Internal use only{update_parent}"
+					parameters = f"Documents.Virtual-folder.Program:CreateOrUpdate?CoreField.Legacy-Identifier={program_id}&CoreField.Title:={folder_name}&NYP.Program-ID:={program_id}&CoreField.visibility-class:=Public{update_parent}"
 
 				call = baseurl + datatable + parameters + '&token=' + token
 				logger.info(f'Updating Program {count} of {total} -- {percent}% complete')
