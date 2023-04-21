@@ -148,7 +148,7 @@ def make_folders(token):
 			if existing_parent_id == season_folder_id:
 				update_parent = ''
 			else:
-				update_parent = f'&CoreField.Parent-folder:=[Documents.Virtual-folder.Program:CoreField.Unique-identifier={season_folder_id}]'
+				update_parent = f'&CoreField.Parent-folder:=[Documents.Virtual-folder.Season:CoreField.Unique-identifier={season_folder_id}]'
 
 			# loop through only the Primary programs
 			if ordinal == 'primary':
