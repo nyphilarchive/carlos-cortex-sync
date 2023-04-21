@@ -189,7 +189,7 @@ def make_folders(token):
 						# if they match, don't update this field
 						update_parent = ''
 					else:
-						update_parent = f'&CoreField.Parent-folder:=[Documents.Virtual-folder.Program:CoreField.Unique-identifier={season_folder_id}]' 
+						update_parent = f'&CoreField.Parent-folder:=[Documents.Virtual-folder.Season:CoreField.Unique-identifier={season_folder_id}]' 
 					parameters = f"Documents.Virtual-folder.Program:CreateOrUpdate?CoreField.Legacy-Identifier={program_id}&CoreField.Title:={folder_name}&NYP.Program-ID:={program_id}&CoreField.visibility-class:=Public{update_parent}"
 
 				call = baseurl + datatable + parameters + '&token=' + token
