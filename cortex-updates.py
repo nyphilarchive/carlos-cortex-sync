@@ -14,11 +14,12 @@ Make sure you have an .env file in this directory that looks like this:
  datatable=/API/DataTable/v2.2/
 """
 
-import requests, csv, sys, os, time, datetime, logging, json
+import requests, csv, sys, os, time, datetime, logging, json, re
 from urllib.parse import quote
 from os.path import join, dirname
 from requests.exceptions import HTTPError
 from dotenv import load_dotenv
+from lxml import etree
 
 
 # First, grab credentials and other values from the .env file in the same folder as this script
@@ -32,7 +33,20 @@ directory = os.environ.get('directory', 'default')
 logs = os.environ.get('logs', 'default')
 baseurl = os.environ.get('baseurl', 'default')
 datatable = os.environ.get('datatable', 'default')
+library = os.environ.get('library', 'default')
 
+def replace_angle_brackets(text):
+    # Define a regular expression pattern to match angle brackets and the enclosed text
+    pattern = r'<(.*?)>'
+    
+    # Define a replacement function that adds the appropriate HTML tags
+    def replace(match):
+        return '<em>{}</em>'.format(match.group(1))
+    
+    # Use re.sub() to replace the matched patterns with the appropriate HTML tags
+    replaced_text = re.sub(pattern, replace, text)
+    
+    return replaced_text
 
 # get a new token from the Login API
 def auth():
@@ -443,6 +457,317 @@ def add_sources_to_program(token):
 			api_call(call,f'Add composer {Composer_ID} to Program',Program_ID)
 	file.close()
 
+# Let's update Scores and Parts
+def library_updates(token):
+
+	def xpath_text(element, path):
+		value = element.xpath(path)
+		return value[0] if value else ''
+
+	# parse the XML file
+	tree = etree.parse(f'{library}library_updates.xml')
+	root = tree.getroot()
+
+	# parse each row in the XML and assign values to variables
+	for row in root.xpath(".//row"):
+		legacy_id = xpath_text(row, "id/text()")
+		composer_id = xpath_text(row, "composer_id/text()")
+		notes_xml = xpath_text(row, "notes_xml/text()").replace('<br>','\n')
+		notes_xml = quote(replace_angle_brackets(notes_xml))
+		publisher_name = quote(xpath_text(row, "publisher_name/text()"))
+		composer_name = quote(xpath_text(row, "composer_name/text()").replace('  ', ' '))
+		composer_first = quote(xpath_text(row, "composer_first_name/text()"))
+		composer_middle = quote(xpath_text(row, "composer_middle_name/text()"))
+		composer_last = quote(xpath_text(row, "composer_last_name/text()"))
+		ar_works_title = quote(xpath_text(row, "ar_works_title/text()"))
+		composer_name_title = xpath_text(row, "composer_name_title/text()").replace('  ', ' ')
+		composer_name_title = quote(replace_angle_brackets(composer_name_title))
+		usedby_ids = [xpath_text(tag, "text()") for tag in row.xpath("usedby_id")]
+		score_id_display = xpath_text(row, "score_id_display/text()")
+		score_location = xpath_text(row, "score_location/text()")
+		score_marking_ids = xpath_text(row, "score_marking_ids/text()").split(';')
+		score_edition_type = xpath_text(row, "score_edition_type_desc/text()")
+
+		# these part variables will be present for each part
+		part_id_display = [xpath_text(tag, "text()") for tag in row.xpath("part_id_display")]
+		part_location = [xpath_text(tag, "text()") for tag in row.xpath("part_location")]
+		part_type_desc = [xpath_text(tag, "text()") for tag in row.xpath("part_type_desc")]
+		part_edition_type = [xpath_text(tag,"text()") for tag in row.xpath("part_edition_type_desc")]
+		
+		# these part variables may not be present for each part
+		part_stand_notes = [xpath_text(tag, "text()") for tag in row.xpath("part_stand_notes")]
+		
+		# these part variables may not be present for each part, and some may have multiple values separated by a semi-colon
+		part_marking_ids = row.xpath("part_marking_ids")
+		part_marking_ids_list = []
+		for tag in part_marking_ids:
+		    text = tag.text.strip() if tag.text else ""
+		    if text:
+		        values = [val.strip() for val in text.split(";")]
+		        part_marking_ids_list.append(values if len(values) > 1 else values[0])
+		    else:
+		        part_marking_ids_list.append("")
+		
+		# Determine the display "suffix" for the asset title
+		if score_id_display and part_id_display[0]:
+			display = "Score and Parts"
+		elif score_id_display and not part_id_display[0]:
+			display = "Score"
+		elif not score_id_display and part_id_display[0]:
+			display = "Parts"
+		else:
+			display = ""
+
+		# Format the asset title
+		title = f"{composer_name} / {ar_works_title} - {display}"
+
+		# Create/Update the Printed Music record
+
+		# clear old values
+		parameters = (
+			f"Documents.Folder.Printed-Music?"
+			f"CoreField.Legacy-Identifier={legacy_id}"
+			f"&NYP.Composer/Work--=&NYP.Marking-Artist--=&NYP.Conductor--=&NYP.Composer--="
+		)
+		url = f"{baseurl}{datatable}{parameters}&token={token}"
+		api_call(url,'Clear old metadata on Printed Music folder',legacy_id)
+
+		# add new values
+		parameters = (
+			f"Documents.Folder.Printed-Music:CreateOrUpdate"
+			f"?CoreField.Legacy-Identifier={legacy_id}"
+			f"&CoreField.parent-folder:=[Documents.All:CoreField.Identifier=PH1N31F]"
+			f"&CoreField.Title:={title}"
+			f"&NYP.Publisher+:={publisher_name}"
+			f"&CoreField.Notes:={notes_xml}"
+			f"&NYP.Composer/Work++={composer_name} / {ar_works_title}"
+			f"&NYP.Composer/Work-Full-Title:={composer_name_title}"
+			f"&CoreField.visibility-class:=Public"
+		)
+		url = f"{baseurl}{datatable}{parameters}&token={token}"
+		api_call(url,'Create/Update Printed Music folder',legacy_id)
+
+		# link the composer
+		# first see if composer exists in Cortex
+		parameters = f'Contacts.Source.Default:Read?CoreField.Composer-ID={composer_id}&format=json'
+		query = f"{baseurl}{datatable}{parameters}&token={token}"
+		response = api_call(query,'Checking if this composer exists:',composer_id)
+
+		if response:
+			response_data = response.json()
+			if response_data is not None and response_data['ResponseSummary']['TotalItemCount'] > 0:
+				logger.info(f'Composer {composer_id} already exists in Cortex')
+			else:
+				#do a Create/Update on the composer
+				parameters = (
+					f"Contacts.Source.Default:CreateOrUpdate?CoreField.Composer-ID={composer_id}"
+					f"&CoreField.First-name:={composer_first}"
+					f"&CoreField.Middle-initial:={composer_middle}"
+					f"&CoreField.Last-name:={composer_last}"
+				)
+				url = f"{baseurl}{datatable}{parameters}&token={token}"
+				api_call(url, f'Create/update Source record for composer', composer_id)
+
+		# then link composer to record
+		parameters = (
+			f"Documents.Folder.Printed-Music:Update"
+			f"?CoreField.Legacy-Identifier={legacy_id}"
+			f"&NYP.Composer+=[Contacts.Source.Default:CoreField.Composer-ID={composer_id}]"
+		)
+		url = f"{baseurl}{datatable}{parameters}&token={token}"
+		api_call(url, f'Link composer {composer_id} to the Printed Music folder',legacy_id)
+
+		# link the score marking artist(s) to the library record
+		if score_marking_ids[0]:
+			for marking_id in score_marking_ids:
+
+				# first see if the marking artist exists in Cortex
+				parameters = f'Contacts.Source.Default:Read?CoreField.Artist-ID={marking_id}&format=json'
+				query = baseurl + datatable + parameters + '&token=' + token
+				response = api_call(query,'Checking if Marking Artist exists',marking_id)
+
+				if response:
+					response_data = response.json()
+					if response_data is not None and response_data['ResponseSummary']['TotalItemCount'] > 0:
+						logger.info(f'Artist {marking_id} already exists in Cortex')
+					else:
+						#do a Create/Update on the artist
+						parameters = (
+							f"Contacts.Source.Default:CreateOrUpdate?CoreField.Artist-ID={marking_id}"
+						)
+						url = f"{baseurl}{datatable}{parameters}&token={token}"
+						api_call(url, 'Create/update Source record for artist', marking_id)
+
+				# now link them to the record
+				parameters = (
+					f"Documents.Folder.Printed-Music:Update"
+					f"?CoreField.Legacy-Identifier={legacy_id}"
+					f"&NYP.Marking-Artist+=[Contacts.Source.Default:CoreField.Artist-ID={marking_id}]"
+				)
+				url = f"{baseurl}{datatable}{parameters}&token={token}"
+				api_call(url, f'Link marking artist {marking_id} to Printed Music folder', legacy_id)
+		else:
+			logger.info(f"No score marking artists for Library record {legacy_id}")
+
+		# link the "parts used by" artists to the record
+		if usedby_ids[0]:
+			for user in usedby_ids:
+				parameters = (
+					f"Documents.Folder.Printed-Music:Update"
+					f"?CoreField.Legacy-Identifier={legacy_id}"
+					f"&NYP.Conductor+=[Contacts.Source.Default:CoreField.Artist-ID={user}]"
+				)
+				url = f"{baseurl}{datatable}{parameters}&token={token}"
+				api_call(url, f'Link Conductor {user} to the Printed Music folder',legacy_id)
+		else:
+			logger.info(f"No Parts Used By conductor for record {legacy_id}")
+
+		# Do the Score call, if there is a score
+		if score_id_display:
+			parameters = (
+				f"Documents.Folder.Score:CreateOrUpdate"
+				f"?CoreField.Legacy-Identifier=MS_{legacy_id}"
+				f"&CoreField.Parent-folder:=[Documents.Folder.Printed-Music:CoreField.Legacy-Identifier={legacy_id}]"
+				f"&CoreField.Title:=MS_{legacy_id}"
+				f"&NYP.Publisher+:={publisher_name}"
+				f"&NYP.Edition-Type+:={score_edition_type}"
+				f"&NYP.Composer/Work++={composer_name} / {ar_works_title}"
+				f"&NYP.Composer/Work-Full-Title:={composer_name_title}"
+				f"&CoreField.Notes:={notes_xml}"
+				f"&CoreField.visibility-class:=Public"
+			)
+			url = f"{baseurl}{datatable}{parameters}&token={token}"
+			api_call(url, f'Create/Update Score MS_{legacy_id} in Printed Music folder', legacy_id)
+
+			# link the composer to the score
+			parameters = (
+				f"Documents.Folder.Score:Update"
+				f"?CoreField.Legacy-Identifier=MS_{legacy_id}"
+				f"&NYP.Composer+=[Contacts.Source.Default:CoreField.Composer-ID={composer_id}]"
+			)
+			url = f"{baseurl}{datatable}{parameters}&token={token}"
+			api_call(url, f'Link composer {composer_id} to Score MS_{legacy_id} in Printed Music folder', legacy_id)
+
+			# link the marking artist(s) to the score if there are any
+			if score_marking_ids[0]:
+				for marking_id in score_marking_ids:
+
+					# now link them to the record
+					parameters = (
+						f"Documents.Folder.Score:Update"
+						f"?CoreField.Legacy-Identifier=MS_{legacy_id}"
+						f"&NYP.Marking-Artist+=[Contacts.Source.Default:CoreField.Artist-ID={marking_id}]"
+					)
+					url = f"{baseurl}{datatable}{parameters}&token={token}"
+					api_call(url, f'Link marking artist {marking_id} to Score MS_{legacy_id} in Printed Music folder', legacy_id)
+			else:
+				logger.info(f"No marking artists for Score MS_{legacy_id}")
+
+		# Create/Update the Parts
+		if part_id_display:
+			for index, part_id in enumerate(part_id_display):
+				if part_id:
+					parameters = (
+						f"Documents.Folder.Part:CreateOrUpdate"
+						f"?CoreField.Legacy-Identifier=MP_{part_id}"
+						f"&CoreField.Parent-folder:=[Documents.Folder.Printed-Music:CoreField.Legacy-Identifier={legacy_id}]"
+						f"&CoreField.Title:=MP_{part_id} - {part_type_desc[index]}"
+						f"&NYP.Publisher+:={publisher_name}"
+						f"&NYP.Edition-Type+:={part_edition_type[index]}"
+						f"&NYP.Composer/Work++={composer_name} / {ar_works_title}"
+						f"&NYP.Composer/Work-Full-Title:={composer_name_title}"
+						f"&NYP.Instrument++={part_type_desc[index]}"
+						f"&NYP.Archives-location:={part_location[index]}"
+						f"&CoreField.Notes:={part_stand_notes[index]}"
+						f"&CoreField.visibility-class:=Public"
+					)
+					url = f"{baseurl}{datatable}{parameters}&token={token}"
+					api_call(url, f'Create/Update Part MP_{part_id} in Printed Music folder', legacy_id)
+
+					# link the composer to the parts
+					parameters = (
+						f"Documents.Folder.Part:Update"
+						f"?CoreField.Legacy-Identifier=MP_{part_id}"
+						f"&NYP.Composer+=[Contacts.Source.Default:CoreField.Composer-ID={composer_id}]"
+					)
+					url = f"{baseurl}{datatable}{parameters}&token={token}"
+					api_call(url, f'Link composer {composer_id} to Part MP_{part_id} in Printed Music folder', legacy_id)
+
+					# link the marking artist(s) to the parts
+					if part_marking_ids_list[index]:
+						# check if we have a list
+						if type(part_marking_ids_list[index]) is list:
+							for artist_id in set(part_marking_ids_list[index]):
+								if artist_id:
+
+									# first see if the marking artist exists in Cortex
+									parameters = f'Contacts.Source.Default:Read?CoreField.Artist-ID={artist_id}&format=json'
+									query = baseurl + datatable + parameters + '&token=' + token
+									response = api_call(query,'Checking if Marking Artist exists',artist_id)
+
+									if response:
+										response_data = response.json()
+										if response_data is not None and response_data['ResponseSummary']['TotalItemCount'] > 0:
+											logger.info(f'Artist {artist_id} already exists in Cortex')
+										else:
+											#do a Create/Update on the artist
+											parameters = (
+												f"Contacts.Source.Default:CreateOrUpdate?CoreField.Artist-ID={artist_id}"
+											)
+											url = f"{baseurl}{datatable}{parameters}&token={token}"
+											api_call(url, 'Create/update Source record for artist', artist_id)
+
+									# now link the artist to the Part
+									parameters = (
+										f"Documents.Folder.Part:Update"
+										f"?CoreField.Legacy-Identifier=MP_{part_id}"
+										f"&NYP.Marking-Artist+=[Contacts.Source.Default:CoreField.Artist-ID={artist_id}]"
+									)
+									url = f"{baseurl}{datatable}{parameters}&token={token}"
+									api_call(url, f'Link marking artist {artist_id} to Part MP_{part_id} in Printed Music folder', legacy_id)
+
+						# then we must have a single value
+						else:
+							# see if the marking artist exists in Cortex
+							parameters = f'Contacts.Source.Default:Read?CoreField.Artist-ID={part_marking_ids_list[index]}&format=json'
+							query = baseurl + datatable + parameters + '&token=' + token
+							response = api_call(query,'Checking if Marking Artist exists',part_marking_ids_list[index])
+
+							if response:
+								response_data = response.json()
+								if response_data is not None and response_data['ResponseSummary']['TotalItemCount'] > 0:
+									logger.info(f'Artist {part_marking_ids_list[index]} already exists in Cortex')
+								else:
+									# do a Create/Update on the artist
+									parameters = (
+										f"Contacts.Source.Default:CreateOrUpdate?CoreField.Artist-ID={part_marking_ids_list[index]}"
+									)
+									url = f"{baseurl}{datatable}{parameters}&token={token}"
+									api_call(url, 'Create/update Source record for artist', part_marking_ids_list[index])
+
+							parameters = (
+								f"Documents.Folder.Part:Update"
+								f"?CoreField.Legacy-Identifier=MP_{part_id}"
+								f"&NYP.Marking-Artist+=[Contacts.Source.Default:CoreField.Artist-ID={part_marking_ids_list[index]}]"
+							)
+							url = f"{baseurl}{datatable}{parameters}&token={token}"
+							api_call(url, f'Link marking artist {part_marking_ids_list[index]} to Part MP_{part_id} in Printed Music folder', legacy_id)
+					else:
+						logger.info(f"No marking artist for Part MP_{part_id}")
+
+					# link the Parts Used By conductor to the Part
+					if usedby_ids[0]:
+						for user in usedby_ids:
+							parameters = (
+								f"Documents.Folder.Part:Update"
+								f"?CoreField.Legacy-Identifier=MP_{part_id}"
+								f"&NYP.Conductor+=[Contacts.Source.Default:CoreField.Artist-ID={user}]"
+							)
+							url = f"{baseurl}{datatable}{parameters}&token={token}"
+							api_call(url, f'Link Conductor {user} to Part MP_{part_id} in Printed Music folder',legacy_id)
+
+	logger.info('All done with Printed Music updates!')
+
 def api_call(url, asset_type, ID, params=None, data=None):
     # Set the maximum number of attempts to make the call
     max_attempts = 2
@@ -480,6 +805,7 @@ def api_call(url, asset_type, ID, params=None, data=None):
             # If the maximum number of attempts has been reached, raise an exception to stop the loop
             if attempts >= max_attempts:
             	# raise
+                logger.error('Moving on...')
                 pass
         except Exception as err:
             # Handle all other errors
@@ -537,11 +863,12 @@ if token and token != '':
 	logger.info(f'We have a token: {token} Proceeding...')
 	print(f'Your token is: {token}')
 
-	make_folders(token)
-	update_folders(token)
-	create_sources(token)
-	add_sources_to_program(token)
-	
+	# make_folders(token)
+	# update_folders(token)
+	# create_sources(token)
+	# add_sources_to_program(token)
+	library_updates(token)
+
 	logger.info('ALL DONE! Bye bye :)')
 
 else:
