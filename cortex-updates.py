@@ -9,6 +9,7 @@ Make sure you have an .env file in this directory that looks like this:
  login=yourCortexLogin
  password=yourCortexPassword
  directory=/location/of/csvs/
+ library=/location/of/printed/music/xml/
  logs=/location/for/logs/
  baseurl=https://mydomain.org
  datatable=/API/DataTable/v2.2/
@@ -35,6 +36,7 @@ baseurl = os.environ.get('baseurl', 'default')
 datatable = os.environ.get('datatable', 'default')
 library = os.environ.get('library', 'default')
 
+# Some helper functions for cleanup
 def replace_angle_brackets(text):
     # Define a regular expression pattern to match angle brackets and the enclosed text
     pattern = r'<(.*?)>'
@@ -339,7 +341,7 @@ def create_sources(token):
 			# We want to preserve the Role field for our Source, which may have other data
 			# So we'll do a Read for each Source, grab the Role field, then add any new values to it
 			parameters = f'Contacts.Source.Default:Read?CoreField.Composer-ID={COMPOSER_ID}&format=json'
-			query = baseurl + datatable + parameters + '&token=' + token
+			query = f"{baseurl}{datatable}{parameters}&token={token}"
 			response = api_call(query,'Getting Roles for Composer',COMPOSER_ID)
 
 			if response:
@@ -355,7 +357,7 @@ def create_sources(token):
 			
 			ROLES = ('|').join(ROLES)
 
-			parameters = f"Contacts.Source.Default:CreateOrUpdate?CoreField.Composer-ID={COMPOSER_ID}&CoreField.First-name:={FIRST_url}&CoreField.Middle-initial:={MIDDLE_url}&CoreField.Last-name:={LAST_url}&CoreField.Display-name:={DISPLAY_url}&CoreField.Birth-Year:={BIRTH}&CoreField.Death-Year:={DEATH}&CoreField.Role:={ROLES}"
+			parameters = f"Contacts.Source.Default:CreateOrUpdate?CoreField.Composer-ID={COMPOSER_ID}&CoreField.First-name:={FIRST_url}&CoreField.Middle-initial:={MIDDLE_url}&CoreField.Last-name:={LAST_url}&CoreField.Birth-Year:={BIRTH}&CoreField.Death-Year:={DEATH}&CoreField.Role:={ROLES}"
 			call = baseurl + datatable + parameters + '&token=' + token
 			api_call(call,'Source: Composer',COMPOSER_ID)
 	file.close()
@@ -405,7 +407,7 @@ def create_sources(token):
 							existing_roles.append(role)
 					ROLES = ('|').join(existing_roles)
 	
-			parameters = f"Contacts.Source.Default:CreateOrUpdate?CoreField.Artist-ID={ARTIST_ID}&CoreField.First-name:={FIRST_url}&CoreField.Middle-initial:={MIDDLE_url}&CoreField.Last-name:={LAST_url}&CoreField.Display-name:={DISPLAY_url}&CoreField.Birth-Year:={BIRTH}&CoreField.Death-Year:={DEATH}&CoreField.Role:={ROLES}&CoreField.Orchestra-Membership:={ORCHESTRA}&CoreField.Orchestra-Membership-Year:={ORCHESTRA_YEARS}"
+			parameters = f"Contacts.Source.Default:CreateOrUpdate?CoreField.Artist-ID={ARTIST_ID}&CoreField.First-name:={FIRST_url}&CoreField.Middle-initial:={MIDDLE_url}&CoreField.Last-name:={LAST_url}&CoreField.Birth-Year:={BIRTH}&CoreField.Death-Year:={DEATH}&CoreField.Role:={ROLES}&CoreField.Orchestra-Membership:={ORCHESTRA}&CoreField.Orchestra-Membership-Year:={ORCHESTRA_YEARS}"
 			call = baseurl + datatable + parameters + '&token=' + token
 			api_call(call,'Source: Artist',ARTIST_ID)
 
@@ -465,7 +467,7 @@ def library_updates(token):
 		return value[0] if value else ''
 
 	# parse the XML file
-	tree = etree.parse(f'{library}library_updates.xml')
+	tree = etree.parse(f'{library}library.xml')
 	root = tree.getroot()
 
 	# parse each row in the XML and assign values to variables
@@ -473,15 +475,15 @@ def library_updates(token):
 		legacy_id = xpath_text(row, "id/text()")
 		composer_id = xpath_text(row, "composer_id/text()")
 		notes_xml = xpath_text(row, "notes_xml/text()").replace('<br>','\n')
-		notes_xml = quote(replace_angle_brackets(notes_xml))
-		publisher_name = quote(xpath_text(row, "publisher_name/text()"))
-		composer_name = quote(xpath_text(row, "composer_name/text()").replace('  ', ' '))
-		composer_first = quote(xpath_text(row, "composer_first_name/text()"))
-		composer_middle = quote(xpath_text(row, "composer_middle_name/text()"))
-		composer_last = quote(xpath_text(row, "composer_last_name/text()"))
-		ar_works_title = quote(xpath_text(row, "ar_works_title/text()"))
+		notes_xml = replace_angle_brackets(notes_xml)
+		publisher_name = xpath_text(row, "publisher_name/text()")
+		composer_name = xpath_text(row, "composer_name/text()").replace('  ', ' ')
+		composer_first = xpath_text(row, "composer_first_name/text()")
+		composer_middle = xpath_text(row, "composer_middle_name/text()")
+		composer_last = xpath_text(row, "composer_last_name/text()")
+		ar_works_title = xpath_text(row, "ar_works_title/text()")
 		composer_name_title = xpath_text(row, "composer_name_title/text()").replace('  ', ' ')
-		composer_name_title = quote(replace_angle_brackets(composer_name_title))
+		composer_name_title = replace_angle_brackets(composer_name_title)
 		usedby_ids = [xpath_text(tag, "text()") for tag in row.xpath("usedby_id")]
 		score_id_display = xpath_text(row, "score_id_display/text()")
 		score_location = xpath_text(row, "score_location/text()")
@@ -537,38 +539,17 @@ def library_updates(token):
 			f"Documents.Folder.Printed-Music:CreateOrUpdate"
 			f"?CoreField.Legacy-Identifier={legacy_id}"
 			f"&CoreField.parent-folder:=[Documents.All:CoreField.Identifier=PH1N31F]"
-			f"&CoreField.Title:={title}"
-			f"&NYP.Publisher+:={publisher_name}"
-			f"&CoreField.Notes:={notes_xml}"
-			f"&NYP.Composer/Work++={composer_name} / {ar_works_title}"
-			f"&NYP.Composer/Work-Full-Title:={composer_name_title}"
+			f"&CoreField.Title:={quote(title)}"
+			f"&NYP.Publisher+:={quote(publisher_name)}"
+			f"&CoreField.Notes:={quote(notes_xml)}"
+			f"&NYP.Composer/Work++={quote(composer_name)} / {quote(ar_works_title)}"
+			f"&NYP.Composer/Work-Full-Title:={quote(composer_name_title)}"
 			f"&CoreField.visibility-class:=Public"
 		)
 		url = f"{baseurl}{datatable}{parameters}&token={token}"
 		api_call(url,'Create/Update Printed Music folder',legacy_id)
 
-		# link the composer
-		# first see if composer exists in Cortex
-		parameters = f'Contacts.Source.Default:Read?CoreField.Composer-ID={composer_id}&format=json'
-		query = f"{baseurl}{datatable}{parameters}&token={token}"
-		response = api_call(query,'Checking if this composer exists:',composer_id)
-
-		if response:
-			response_data = response.json()
-			if response_data is not None and response_data['ResponseSummary']['TotalItemCount'] > 0:
-				logger.info(f'Composer {composer_id} already exists in Cortex')
-			else:
-				#do a Create/Update on the composer
-				parameters = (
-					f"Contacts.Source.Default:CreateOrUpdate?CoreField.Composer-ID={composer_id}"
-					f"&CoreField.First-name:={composer_first}"
-					f"&CoreField.Middle-initial:={composer_middle}"
-					f"&CoreField.Last-name:={composer_last}"
-				)
-				url = f"{baseurl}{datatable}{parameters}&token={token}"
-				api_call(url, f'Create/update Source record for composer', composer_id)
-
-		# then link composer to record
+		# link composer to record
 		parameters = (
 			f"Documents.Folder.Printed-Music:Update"
 			f"?CoreField.Legacy-Identifier={legacy_id}"
@@ -624,16 +605,27 @@ def library_updates(token):
 
 		# Do the Score call, if there is a score
 		if score_id_display:
+
+			# clear old values
+			parameters = (
+				f"Documents.Folder.Score?"
+				f"CoreField.Legacy-Identifier=MS_{legacy_id}"
+				f"&NYP.Composer/Work--=&NYP.Marking-Artist--=&NYP.Composer--=&NYP.Publisher--=&NYP.Edition-Type--="
+			)
+			url = f"{baseurl}{datatable}{parameters}&token={token}"
+			api_call(url,'Clear old metadata on Score',legacy_id)
+
+			# add new values
 			parameters = (
 				f"Documents.Folder.Score:CreateOrUpdate"
 				f"?CoreField.Legacy-Identifier=MS_{legacy_id}"
 				f"&CoreField.Parent-folder:=[Documents.Folder.Printed-Music:CoreField.Legacy-Identifier={legacy_id}]"
 				f"&CoreField.Title:=MS_{legacy_id}"
-				f"&NYP.Publisher+:={publisher_name}"
+				f"&NYP.Publisher+:={quote(publisher_name)}"
 				f"&NYP.Edition-Type+:={score_edition_type}"
-				f"&NYP.Composer/Work++={composer_name} / {ar_works_title}"
-				f"&NYP.Composer/Work-Full-Title:={composer_name_title}"
-				f"&CoreField.Notes:={notes_xml}"
+				f"&NYP.Composer/Work++={quote(composer_name)} / {quote(ar_works_title)}"
+				f"&NYP.Composer/Work-Full-Title:={quote(composer_name_title)}"
+				f"&CoreField.Notes:={quote(notes_xml)}"
 				f"&CoreField.visibility-class:=Public"
 			)
 			url = f"{baseurl}{datatable}{parameters}&token={token}"
@@ -667,15 +659,26 @@ def library_updates(token):
 		if part_id_display:
 			for index, part_id in enumerate(part_id_display):
 				if part_id:
+
+					# clear old values
+					parameters = (
+						f"Documents.Folder.Score?"
+						f"CoreField.Legacy-Identifier=MS_{legacy_id}"
+						f"&NYP.Composer/Work--=&NYP.Marking-Artist--=&NYP.Composer--=&NYP.Conductor--=&NYP.Publisher--=&NYP.Edition-Type&NYP.Instrument--="
+					)
+					url = f"{baseurl}{datatable}{parameters}&token={token}"
+					api_call(url,f'Clear old metadata on Part MP_{part_id}',legacy_id)
+
+					# add new values
 					parameters = (
 						f"Documents.Folder.Part:CreateOrUpdate"
 						f"?CoreField.Legacy-Identifier=MP_{part_id}"
 						f"&CoreField.Parent-folder:=[Documents.Folder.Printed-Music:CoreField.Legacy-Identifier={legacy_id}]"
 						f"&CoreField.Title:=MP_{part_id} - {part_type_desc[index]}"
-						f"&NYP.Publisher+:={publisher_name}"
+						f"&NYP.Publisher+:={quote(publisher_name)}"
 						f"&NYP.Edition-Type+:={part_edition_type[index]}"
-						f"&NYP.Composer/Work++={composer_name} / {ar_works_title}"
-						f"&NYP.Composer/Work-Full-Title:={composer_name_title}"
+						f"&NYP.Composer/Work++={quote(composer_name)} / {quote(ar_works_title)}"
+						f"&NYP.Composer/Work-Full-Title:={quote(composer_name_title)}"
 						f"&NYP.Instrument++={part_type_desc[index]}"
 						f"&NYP.Archives-location:={part_location[index]}"
 						f"&CoreField.Notes:={part_stand_notes[index]}"
