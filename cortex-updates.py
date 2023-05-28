@@ -467,7 +467,7 @@ def library_updates(token):
 		return value[0] if value else ''
 
 	# parse the XML file
-	tree = etree.parse(f'{library}library.xml')
+	tree = etree.parse(f'{library}library-updates.xml')
 	root = tree.getroot()
 
 	# parse each row in the XML and assign values to variables
@@ -866,10 +866,10 @@ if token and token != '':
 	logger.info(f'We have a token: {token} Proceeding...')
 	print(f'Your token is: {token}')
 
-	# make_folders(token)
-	# update_folders(token)
-	# create_sources(token)
-	# add_sources_to_program(token)
+	make_folders(token)
+	update_folders(token)
+	create_sources(token)
+	add_sources_to_program(token)
 	library_updates(token)
 
 	logger.info('ALL DONE! Bye bye :)')
