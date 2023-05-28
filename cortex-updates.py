@@ -544,7 +544,6 @@ def library_updates(token):
 			f"&CoreField.Notes:={quote(notes_xml)}"
 			f"&NYP.Composer/Work++={quote(composer_name)} / {quote(ar_works_title)}"
 			f"&NYP.Composer/Work-Full-Title:={quote(composer_name_title)}"
-			f"&CoreField.visibility-class:=Public"
 		)
 		url = f"{baseurl}{datatable}{parameters}&token={token}"
 		api_call(url,'Create/Update Printed Music folder',legacy_id)
@@ -626,7 +625,6 @@ def library_updates(token):
 				f"&NYP.Composer/Work++={quote(composer_name)} / {quote(ar_works_title)}"
 				f"&NYP.Composer/Work-Full-Title:={quote(composer_name_title)}"
 				f"&CoreField.Notes:={quote(notes_xml)}"
-				f"&CoreField.visibility-class:=Public"
 			)
 			url = f"{baseurl}{datatable}{parameters}&token={token}"
 			api_call(url, f'Create/Update Score MS_{legacy_id} in Printed Music folder', legacy_id)
@@ -682,7 +680,6 @@ def library_updates(token):
 						f"&NYP.Instrument++={part_type_desc[index]}"
 						f"&NYP.Archives-location:={part_location[index]}"
 						f"&CoreField.Notes:={part_stand_notes[index]}"
-						f"&CoreField.visibility-class:=Public"
 					)
 					url = f"{baseurl}{datatable}{parameters}&token={token}"
 					api_call(url, f'Create/Update Part MP_{part_id} in Printed Music folder', legacy_id)
