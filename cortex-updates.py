@@ -467,7 +467,7 @@ def library_updates(token):
 		return value[0] if value else ''
 
 	# parse the XML file
-	tree = etree.parse(f'{library}library-updates.xml')
+	tree = etree.parse(f'{library}library_updates.xml')
 	root = tree.getroot()
 
 	# parse each row in the XML and assign values to variables
