@@ -473,6 +473,9 @@ def library_updates(token):
 	# parse each row in the XML and assign values to variables
 	for row in root.xpath(".//row"):
 		legacy_id = xpath_text(row, "id/text()")
+
+		# temporary addition to fix just a few Library records in Cortex
+		# once updated, remove this row and un-tab rest of this function
 		composer_id = xpath_text(row, "composer_id/text()")
 		notes_xml = xpath_text(row, "notes_xml/text()").replace('<br>','\n')
 		notes_xml = replace_angle_brackets(notes_xml)
@@ -534,19 +537,24 @@ def library_updates(token):
 		url = f"{baseurl}{datatable}{parameters}&token={token}"
 		api_call(url,'Clear old metadata on Printed Music folder',legacy_id)
 
-		# add new values
-		parameters = (
-			f"Documents.Folder.Printed-Music:CreateOrUpdate"
-			f"?CoreField.Legacy-Identifier={legacy_id}"
-			f"&CoreField.parent-folder:=[Documents.All:CoreField.Identifier=PH1N31F]"
-			f"&CoreField.Title:={quote(title)}"
-			f"&NYP.Publisher+:={quote(publisher_name)}"
-			f"&CoreField.Notes:={quote(notes_xml)}"
-			f"&NYP.Composer/Work++={quote(composer_name)} / {quote(ar_works_title)}"
-			f"&NYP.Composer/Work-Full-Title:={quote(composer_name_title)}"
-		)
-		url = f"{baseurl}{datatable}{parameters}&token={token}"
-		api_call(url,'Create/Update Printed Music folder',legacy_id)
+		# Send this data as a JSON payload because it might exceed the character limit for a regular API call
+		data = {
+			'CoreField.Legacy-Identifier': legacy_id,
+			'CoreField.parent-folder:': '[Documents.All:CoreField.Identifier=PH1N31F]',
+			'CoreField.Title:': title,
+			'NYP.Publisher+:': publisher_name,
+			'CoreField.Notes:': notes_xml,
+			'NYP.Composer/Work++': f'{composer_name} / {ar_works_title}',
+			'NYP.Composer/Work-Full-Title:': composer_name_title
+		}
+		# fix for linebreaks and such - dump to string and load back to JSON
+		data = json.dumps(data)
+		data = json.loads(data)
+
+		action = 'Documents.Folder.Printed-Music:CreateOrUpdate'
+		params = {'token': token}
+		url = f"{baseurl}{datatable}{action}"
+		api_call(url,'Create/Update Printed Music folder',legacy_id,params,data)
 
 		# link composer to record
 		parameters = (
@@ -614,20 +622,26 @@ def library_updates(token):
 			url = f"{baseurl}{datatable}{parameters}&token={token}"
 			api_call(url,'Clear old metadata on Score',legacy_id)
 
-			# add new values
-			parameters = (
-				f"Documents.Folder.Score:CreateOrUpdate"
-				f"?CoreField.Legacy-Identifier=MS_{legacy_id}"
-				f"&CoreField.Parent-folder:=[Documents.Folder.Printed-Music:CoreField.Legacy-Identifier={legacy_id}]"
-				f"&CoreField.Title:=MS_{legacy_id}"
-				f"&NYP.Publisher+:={quote(publisher_name)}"
-				f"&NYP.Edition-Type+:={score_edition_type}"
-				f"&NYP.Composer/Work++={quote(composer_name)} / {quote(ar_works_title)}"
-				f"&NYP.Composer/Work-Full-Title:={quote(composer_name_title)}"
-				f"&CoreField.Notes:={quote(notes_xml)}"
-			)
-			url = f"{baseurl}{datatable}{parameters}&token={token}"
-			api_call(url, f'Create/Update Score MS_{legacy_id} in Printed Music folder', legacy_id)
+			# Send this data as a JSON payload because it might exceed the character limit for a regular API call
+			data = {
+				'CoreField.Legacy-Identifier': f'MS_{legacy_id}',
+				'CoreField.parent-folder:': f'[Documents.Folder.Printed-Music:CoreField.Legacy-Identifier={legacy_id}]',
+				'CoreField.Title:': f'MS_{legacy_id}',
+				'NYP.Publisher+:': publisher_name,
+				'NYP.Edition-Type+:': score_edition_type,
+				'CoreField.Notes:': notes_xml,
+				'NYP.Composer/Work++': f'{composer_name} / {ar_works_title}',
+				'NYP.Composer/Work-Full-Title:': composer_name_title,
+				'NYP.Archives-location:': score_location
+			}
+			# fix for linebreaks and such - dump to string and load back to JSON
+			data = json.dumps(data)
+			data = json.loads(data)
+
+			action = 'Documents.Folder.Score:CreateOrUpdate'
+			params = {'token': token}
+			url = f"{baseurl}{datatable}{action}"
+			api_call(url, f'Create/Update Score MS_{legacy_id} in Printed Music folder', legacy_id, params, data)
 
 			# link the composer to the score
 			parameters = (
@@ -667,22 +681,27 @@ def library_updates(token):
 					url = f"{baseurl}{datatable}{parameters}&token={token}"
 					api_call(url,f'Clear old metadata on Part MP_{part_id}',legacy_id)
 
-					# add new values
-					parameters = (
-						f"Documents.Folder.Part:CreateOrUpdate"
-						f"?CoreField.Legacy-Identifier=MP_{part_id}"
-						f"&CoreField.Parent-folder:=[Documents.Folder.Printed-Music:CoreField.Legacy-Identifier={legacy_id}]"
-						f"&CoreField.Title:=MP_{part_id} - {part_type_desc[index]}"
-						f"&NYP.Publisher+:={quote(publisher_name)}"
-						f"&NYP.Edition-Type+:={part_edition_type[index]}"
-						f"&NYP.Composer/Work++={quote(composer_name)} / {quote(ar_works_title)}"
-						f"&NYP.Composer/Work-Full-Title:={quote(composer_name_title)}"
-						f"&NYP.Instrument++={part_type_desc[index]}"
-						f"&NYP.Archives-location:={part_location[index]}"
-						f"&CoreField.Notes:={part_stand_notes[index]}"
-					)
-					url = f"{baseurl}{datatable}{parameters}&token={token}"
-					api_call(url, f'Create/Update Part MP_{part_id} in Printed Music folder', legacy_id)
+					# Send this data as a JSON payload because it might exceed the character limit for a regular API call
+					data = {
+						'CoreField.Legacy-Identifier': f'MP_{part_id}',
+						'CoreField.parent-folder:': f'[Documents.Folder.Printed-Music:CoreField.Legacy-Identifier={legacy_id}]',
+						'CoreField.Title:': f'MP_{part_id} - {part_type_desc[index]}',
+						'NYP.Publisher+:': publisher_name,
+						'NYP.Edition-Type+:': part_edition_type[index],
+						'CoreField.Notes:': part_stand_notes[index],
+						'NYP.Composer/Work++': f'{composer_name} / {ar_works_title}',
+						'NYP.Composer/Work-Full-Title:': composer_name_title,
+						'NYP.Instrument++': part_type_desc[index],
+						'NYP.Archives-location:': part_location[index]
+					}
+					# fix for linebreaks and such - dump to string and load back to JSON
+					data = json.dumps(data)
+					data = json.loads(data)
+
+					action = 'Documents.Folder.Part:CreateOrUpdate'
+					params = {'token': token}
+					url = f"{baseurl}{datatable}{action}"
+					api_call(url, f'Create/Update Part MP_{part_id} in Printed Music folder', legacy_id, params, data)
 
 					# link the composer to the parts
 					parameters = (
