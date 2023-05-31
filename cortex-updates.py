@@ -530,8 +530,8 @@ def library_updates(token):
 
 		# clear old values
 		parameters = (
-			f"Documents.Folder.Printed-Music?"
-			f"CoreField.Legacy-Identifier={legacy_id}"
+			f"Documents.Folder.Printed-Music:CreateOrUpdate"
+			f"?CoreField.Legacy-Identifier={legacy_id}"
 			f"&NYP.Composer/Work--=&NYP.Marking-Artist--=&NYP.Conductor--=&NYP.Composer--="
 		)
 		url = f"{baseurl}{datatable}{parameters}&token={token}"
@@ -615,8 +615,8 @@ def library_updates(token):
 
 			# clear old values
 			parameters = (
-				f"Documents.Folder.Score?"
-				f"CoreField.Legacy-Identifier=MS_{legacy_id}"
+				f"Documents.Folder.Score:CreateOrUpdate"
+				f"?CoreField.Legacy-Identifier=MS_{legacy_id}"
 				f"&NYP.Composer/Work--=&NYP.Marking-Artist--=&NYP.Composer--=&NYP.Publisher--=&NYP.Edition-Type--="
 			)
 			url = f"{baseurl}{datatable}{parameters}&token={token}"
@@ -674,8 +674,8 @@ def library_updates(token):
 
 					# clear old values
 					parameters = (
-						f"Documents.Folder.Score?"
-						f"CoreField.Legacy-Identifier=MS_{legacy_id}"
+						f"Documents.Folder.Part:CreateOrUpdate"
+						f"?CoreField.Legacy-Identifier=MP_{legacy_id}"
 						f"&NYP.Composer/Work--=&NYP.Marking-Artist--=&NYP.Composer--=&NYP.Conductor--=&NYP.Publisher--=&NYP.Edition-Type&NYP.Instrument--="
 					)
 					url = f"{baseurl}{datatable}{parameters}&token={token}"
