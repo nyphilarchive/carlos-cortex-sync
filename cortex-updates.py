@@ -617,7 +617,7 @@ def library_updates(token):
 			parameters = (
 				f"Documents.Folder.Score:CreateOrUpdate"
 				f"?CoreField.Legacy-Identifier=MS_{legacy_id}"
-				f"&NYP.Composer/Work--=&NYP.Marking-Artist--=&NYP.Composer--=&NYP.Publisher--="
+				f"&NYP.Composer/Work--=&NYP.Marking-Artist--=&NYP.Composer--="
 			)
 			url = f"{baseurl}{datatable}{parameters}&token={token}"
 			api_call(url,'Clear old metadata on Score',legacy_id)
@@ -676,7 +676,7 @@ def library_updates(token):
 					parameters = (
 						f"Documents.Folder.Part:CreateOrUpdate"
 						f"?CoreField.Legacy-Identifier=MP_{legacy_id}"
-						f"&NYP.Composer/Work--=&NYP.Marking-Artist--=&NYP.Composer--=&NYP.Conductor--=&NYP.Publisher--=&NYP.Instrument--="
+						f"&NYP.Composer/Work--=&NYP.Marking-Artist--=&NYP.Composer--=&NYP.Conductor--=&NYP.Instrument--="
 					)
 					url = f"{baseurl}{datatable}{parameters}&token={token}"
 					api_call(url,f'Clear old metadata on Part MP_{part_id}',legacy_id)
