@@ -617,7 +617,7 @@ def library_updates(token):
 			parameters = (
 				f"Documents.Folder.Score:CreateOrUpdate"
 				f"?CoreField.Legacy-Identifier=MS_{legacy_id}"
-				f"&NYP.Composer/Work--=&NYP.Marking-Artist--=&NYP.Composer--=&NYP.Publisher--=&NYP.Edition-Type--="
+				f"&NYP.Composer/Work--=&NYP.Marking-Artist--=&NYP.Composer--=&NYP.Publisher--="
 			)
 			url = f"{baseurl}{datatable}{parameters}&token={token}"
 			api_call(url,'Clear old metadata on Score',legacy_id)
