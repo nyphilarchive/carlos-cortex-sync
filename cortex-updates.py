@@ -676,7 +676,7 @@ def library_updates(token):
 					parameters = (
 						f"Documents.Folder.Part:CreateOrUpdate"
 						f"?CoreField.Legacy-Identifier=MP_{legacy_id}"
-						f"&NYP.Composer/Work--=&NYP.Marking-Artist--=&NYP.Composer--=&NYP.Conductor--=&NYP.Publisher--=&NYP.Edition-Type&NYP.Instrument--="
+						f"&NYP.Composer/Work--=&NYP.Marking-Artist--=&NYP.Composer--=&NYP.Conductor--=&NYP.Publisher--=&NYP.Instrument--="
 					)
 					url = f"{baseurl}{datatable}{parameters}&token={token}"
 					api_call(url,f'Clear old metadata on Part MP_{part_id}',legacy_id)
@@ -882,10 +882,10 @@ if token and token != '':
 	logger.info(f'We have a token: {token} Proceeding...')
 	print(f'Your token is: {token}')
 
-	make_folders(token)
-	update_folders(token)
-	create_sources(token)
-	add_sources_to_program(token)
+	# make_folders(token)
+	# update_folders(token)
+	# create_sources(token)
+	# add_sources_to_program(token)
 	library_updates(token)
 
 	logger.info('ALL DONE! Bye bye :)')
