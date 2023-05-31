@@ -675,7 +675,7 @@ def library_updates(token):
 					# clear old values
 					parameters = (
 						f"Documents.Folder.Part:CreateOrUpdate"
-						f"?CoreField.Legacy-Identifier=MP_{legacy_id}"
+						f"?CoreField.Legacy-Identifier=MP_{part_id}"
 						f"&NYP.Composer/Work--=&NYP.Marking-Artist--=&NYP.Composer--=&NYP.Conductor--=&NYP.Instrument--="
 					)
 					url = f"{baseurl}{datatable}{parameters}&token={token}"
