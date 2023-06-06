@@ -108,9 +108,9 @@ def make_folders(token):
 			"""
 			See if this folder already exists in Cortex and what the parent folder is
 			If the folder exists and the existing parent is the same as the parent in the CSV, we can skip that parameter in the API call
-			This will prevent Cortex from changing the order of the folder in the application's Browser sidepanel
+			This will prevent Cortex from changing the manual order of the program within the Season folder
 			"""
-			parameters = f'CoreField.Legacy-Identifier:{program_id} DocSubType:Program&fields=Document.ParentIdentifier&format=json'
+			parameters = f'CoreField.Legacy-Identifier:{program_id} DocSubType:Program&fields=Document.LineageParentName&format=json'
 			query = f'{baseurl}/API/search/v3.0/search?query={parameters}&token={token}'
 			try:
 				r = requests.get(query)
@@ -122,40 +122,13 @@ def make_folders(token):
 				r_data = r.json()
 				if r_data['APIResponse']['GlobalInfo']['TotalCount'] == 1:
 					# We got one result, which is good
-					existing_parent_id = r_data['APIResponse']['Items'][0]["Document.ParentIdentifier"]
+					existing_parent_id = r_data['APIResponse']['Items'][0]["Document.LineageParentName"]
 				else:
 					# We have no result, or more than one parent, so we'll assign the parent from the CSV as usual
 					existing_parent_id = ''
 			else:
 				existing_parent_id = ''
 				logger.warning(f'Unable to find Program ID {program_id}')
-
-			# save existing_parent_id back to the list for future use
-			row.append(existing_parent_id)
-
-			# Do another Search query to get the legacy identifier of the existing parent
-			parameters = f'CoreField.Unique-Identifier:{existing_parent_id}&fields=MediaNumber&format=json'
-			query = f'{baseurl}/API/search/v3.0/search?query={parameters}&token={token}'
-			try:
-				r = requests.get(query)
-			except:
-				logger.warning(f'Unable to find Program ID {program_id}')
-				pass
-
-			if r:
-				r_data = r.json()
-				if r_data['APIResponse']['GlobalInfo']['TotalCount'] == 1:
-					# We got one result, which is good
-					existing_parent_legacy_id = r_data['APIResponse']['Items'][0]["MediaNumber"]
-				else:
-					# We have no result, or more than one parent, so we'll assign the parent from the CSV as usual
-					existing_parent_legacy_id = ''
-			else:
-				logger.warning(f'Unable to find Program ID {program_id}')
-				existing_parent_legacy_id = ''
-
-			# save it back to the list for future use
-			row.append(existing_parent_legacy_id)
 
 			"""
 			Now we can compare the parent_id from Cortex to the CSV
@@ -166,53 +139,13 @@ def make_folders(token):
 			else:
 				update_parent = f'&CoreField.Parent-folder:=[Documents.Virtual-folder.Season:CoreField.Unique-identifier={season_folder_id}]'
 
-			# loop through only the Primary programs
-			if ordinal == 'primary':
-				parameters = f"Documents.Virtual-folder.Program:CreateOrUpdate?CoreField.Legacy-Identifier={program_id}&CoreField.Title:={folder_name}&NYP.Program-ID:={program_id}&CoreField.visibility-class:=Public{update_parent}"
-				# parameters = quote(parameters)
-				call = baseurl + datatable + parameters + '&token=' + token
-				logger.info(f'Updating Program {count} of {total} -- {percent}% complete')
-				api_call(call,'Program Folder',program_id)
-				count += 1
-				percent = round(count/total, 4)*100
-
-
-		# Now loop through again for secondary programs and assign them to the primary folders
-		for row in rows[1:]:
-			season_folder_id = row[0]
-			program_id = row[1]
-			folder_name = row[2]
-			ordinal = row[3]
-			parent_program = row[4]
-			existing_parent_id = row[5]
-			existing_parent_legacy_id = row[6]
-
-			if ordinal == 'secondary':
-
-				# check if there's a value for parent_program... if not, kick it back up to the season level
-				if parent_program != '':
-					# check if the parent folder from the CSV matches the existing one
-					if parent_program == existing_parent_legacy_id:
-						# if they match, don't update this field
-						update_parent = ''
-						logger.info("Parent folders match -- no need to update this field")
-					else:
-						update_parent = f'&CoreField.Parent-folder:=[Documents.Virtual-folder.Program:CoreField.Legacy-Identifier={parent_program}]'
-					parameters = f"Documents.Virtual-folder.Program:CreateOrUpdate?CoreField.Legacy-Identifier={program_id}&CoreField.Title:={folder_name}&NYP.Program-ID:={program_id}&CoreField.visibility-class:=Public{update_parent}"
-				else:
-					# check if the parent folder from the CSV matches the existing one
-					if existing_parent_id == season_folder_id:
-						# if they match, don't update this field
-						update_parent = ''
-					else:
-						update_parent = f'&CoreField.Parent-folder:=[Documents.Virtual-folder.Season:CoreField.Unique-identifier={season_folder_id}]' 
-					parameters = f"Documents.Virtual-folder.Program:CreateOrUpdate?CoreField.Legacy-Identifier={program_id}&CoreField.Title:={folder_name}&NYP.Program-ID:={program_id}&CoreField.visibility-class:=Public{update_parent}"
-
-				call = baseurl + datatable + parameters + '&token=' + token
-				logger.info(f'Updating Program {count} of {total} -- {percent}% complete')
-				api_call(call,'Program Folder',program_id)
-				count +=1
-				percent = round(count/total, 4)*100
+			# loop through the programs
+			parameters = f"Documents.Virtual-folder.Program:CreateOrUpdate?CoreField.Legacy-Identifier={program_id}&CoreField.Title:={folder_name}&NYP.Program-ID:={program_id}&CoreField.visibility-class:=Public{update_parent}"
+			call = baseurl + datatable + parameters + '&token=' + token
+			logger.info(f'Updating Program {count} of {total} -- {percent}% complete')
+			api_call(call,'Program Folder',program_id)
+			count += 1
+			percent = round(count/total, 4)*100
 
 	file.close()
 	logger.info('Done')
@@ -242,7 +175,6 @@ def update_folders(token):
 			LOCATION_NAME = row[7]
 			VENUE_NAME = row[8]
 			SUB_EVENT_NAMES = row[9]
-			SOLOIST_SLASH_INSTRUMENT = row[10]
 			COMPOSER_TITLE = row[11].replace('|','\n\n').replace('Intermission, / .','Intermission').replace('<','').replace('>','')
 			COMPOSER_TITLE_SHORT = row[12].replace('<','').replace('>','')
 			NOTES_XML = row[13].replace('<br>','\n')
@@ -285,7 +217,6 @@ def update_folders(token):
 					'NYP.Location++': LOCATION_NAME,
 					'NYP.Venue++': VENUE_NAME,
 					'NYP.Event-Type++': SUB_EVENT_NAMES,
-					'NYP.Soloist-/-Instrument++': SOLOIST_SLASH_INSTRUMENT,
 					'NYP.Composer/Work++': COMPOSER_TITLE_SHORT,
 					'NYP.Composer/Work-Full-Title:': COMPOSER_TITLE,
 					'NYP.Notes-on-program:': NOTES_XML,
@@ -299,7 +230,7 @@ def update_folders(token):
 				logger.info(f'Updating Program {count} of {total} = {percent}% complete')
 
 				# clear values from program folders
-				parameters = f"Documents.Virtual-folder.Program:Update?CoreField.Legacy-Identifier={ID}&NYP.Season--=&NYP.Program-Date(s)--=&NYP.Program-Times--=&NYP.Location--=&NYP.Venue--=&NYP.Event-Type--=&NYP.Soloist-/-Instrument--=&NYP.Composer/Work--=&NYP.Soloist--=&NYP.Conductor--=&NYP.Composer--="
+				parameters = f"Documents.Virtual-folder.Program:Update?CoreField.Legacy-Identifier={ID}&NYP.Season--=&NYP.Program-Date(s)--=&NYP.Program-Times--=&NYP.Location--=&NYP.Venue--=&NYP.Event-Type--=&NYP.Composer/Work--=&NYP.Soloist--=&NYP.Conductor--=&NYP.Composer--="
 				call = baseurl + datatable + parameters + '&token=' + token
 				api_call(call,'Program - clear old metadata',ID)
 				

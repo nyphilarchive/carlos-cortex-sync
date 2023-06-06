@@ -27,6 +27,7 @@ def make_folders(data,all_data):
 	for program in data:
 
 		folder = {}
+		folder['season'] = data[program]['SEASON']
 		folder['program_id'] = program
 
 		# do we have a week number?
