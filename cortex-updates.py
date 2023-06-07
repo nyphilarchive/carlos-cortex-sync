@@ -103,7 +103,6 @@ def make_folders(token):
 			season_folder_id = row[0]
 			program_id = row[1]
 			folder_name = row[2]
-			ordinal = row[3]
 
 			"""
 			See if this folder already exists in Cortex and what the parent folder is
@@ -137,11 +136,11 @@ def make_folders(token):
 			if existing_parent_id == season_folder_id:
 				update_parent = ''
 			else:
-				update_parent = f'&CoreField.Parent-folder:=[Documents.Virtual-folder.Season:CoreField.Unique-identifier={season_folder_id}]'
-
+				update_parent = f'&CoreField.Parent-folder:=[Documents.Virtual-folder.Season:CoreField.Legacy-identifier={season_folder_id}]'
+			
 			# loop through the programs
 			parameters = f"Documents.Virtual-folder.Program:CreateOrUpdate?CoreField.Legacy-Identifier={program_id}&CoreField.Title:={folder_name}&NYP.Program-ID:={program_id}&CoreField.visibility-class:=Public{update_parent}"
-			call = baseurl + datatable + parameters + '&token=' + token
+			call = f'{baseurl}{datatable}{parameters}&token={token}'
 			logger.info(f'Updating Program {count} of {total} -- {percent}% complete')
 			api_call(call,'Program Folder',program_id)
 			count += 1
@@ -179,69 +178,72 @@ def update_folders(token):
 			COMPOSER_TITLE_SHORT = row[12].replace('<','').replace('>','')
 			NOTES_XML = row[13].replace('<br>','\n')
 
-			# get the Digital Archives (Hadoop) ID from public Solr
-			lookup = f"http://proslrapp01.nyphil.live:9993/solr/assets/select?q=npp%5C%3AProgramID%3A{ID}&fl=id&wt=json"
-			try:
-				response = requests.get(lookup)
-				# If the response was successful, no Exception will be raised
-				response.raise_for_status()
-			except HTTPError as http_err:
-				logger.error(f'Failed to get Solr data for program {ID} - HTTP error occurred: {http_err}')
-			except Exception as err:
-				logger.error(f'Failed to get Solr data for program {ID} - Other error occurred: {err}')
-			else:
-				logger.info(f'Success retrieving Solr data for program {ID}')
+			if int(SEASON[0:4]) < 1940:
 
-			if response:
-				# parse JSON results
-				response = response.json()
-				if response["response"]["numFound"] == 1:
-					digarch_id = response["response"]["docs"][0]["id"]
+				# get the Digital Archives (Hadoop) ID from public Solr
+				lookup = f"http://proslrapp01.nyphil.live:9993/solr/assets/select?q=npp%5C%3AProgramID%3A{ID}&fl=id&wt=json"
+				try:
+					response = requests.get(lookup)
+					# If the response was successful, no Exception will be raised
+					response.raise_for_status()
+				except HTTPError as http_err:
+					logger.error(f'Failed to get Solr data for program {ID} - HTTP error occurred: {http_err}')
+				except Exception as err:
+					logger.error(f'Failed to get Solr data for program {ID} - Other error occurred: {err}')
+				else:
+					logger.info(f'Success retrieving Solr data for program {ID}')
+					response = ''
+
+				if response:
+					# parse JSON results
+					response = response.json()
+					if response["response"]["numFound"] == 1:
+						digarch_id = response["response"]["docs"][0]["id"]
+					else:
+						digarch_id = ''
 				else:
 					digarch_id = ''
-			else:
-				digarch_id = ''
 
-			# if ID in update_list:
-			if ID !='':
+				# if ID in update_list:
+				if ID !='':
 
-				# Create the dict
-				data = {
-					'CoreField.Legacy-Identifier': ID,
-					'NYP.Season+': SEASON,
-					'NYP.Week+:': WEEK,
-					'NYP.Orchestra:': ORCHESTRA_NAME,
-					'NYP.Program-Date(s)++': DATE,
-					'NYP.Program-Date-Range:': DATE_RANGE,
-					'NYP.Program-Times++': PERFORMANCE_TIME,
-					'NYP.Location++': LOCATION_NAME,
-					'NYP.Venue++': VENUE_NAME,
-					'NYP.Event-Type++': SUB_EVENT_NAMES,
-					'NYP.Composer/Work++': COMPOSER_TITLE_SHORT,
-					'NYP.Composer/Work-Full-Title:': COMPOSER_TITLE,
-					'NYP.Notes-on-program:': NOTES_XML,
-					'NYP.Digital-Archives-ID:': digarch_id,
-				}
-				# fix for linebreaks and such - dump to string and load back to JSON
-				data = json.dumps(data)
-				data = json.loads(data)
+					# Create the dict
+					data = {
+						'CoreField.Legacy-Identifier': ID,
+						'NYP.Season+': SEASON,
+						'NYP.Week+:': WEEK,
+						'NYP.Orchestra:': ORCHESTRA_NAME,
+						'NYP.Program-Date(s)++': DATE,
+						'NYP.Program-Date-Range:': DATE_RANGE,
+						'NYP.Program-Times++': PERFORMANCE_TIME,
+						'NYP.Location++': LOCATION_NAME,
+						'NYP.Venue++': VENUE_NAME,
+						'NYP.Event-Type++': SUB_EVENT_NAMES,
+						'NYP.Composer/Work++': COMPOSER_TITLE_SHORT,
+						'NYP.Composer/Work-Full-Title:': COMPOSER_TITLE,
+						'NYP.Notes-on-program:': NOTES_XML,
+						'NYP.Digital-Archives-ID:': digarch_id,
+					}
+					# fix for linebreaks and such - dump to string and load back to JSON
+					data = json.dumps(data)
+					data = json.loads(data)
 
-				# log some info
-				logger.info(f'Updating Program {count} of {total} = {percent}% complete')
+					# log some info
+					logger.info(f'Updating Program {count} of {total} = {percent}% complete')
 
-				# clear values from program folders
-				parameters = f"Documents.Virtual-folder.Program:Update?CoreField.Legacy-Identifier={ID}&NYP.Season--=&NYP.Program-Date(s)--=&NYP.Program-Times--=&NYP.Location--=&NYP.Venue--=&NYP.Event-Type--=&NYP.Composer/Work--=&NYP.Soloist--=&NYP.Conductor--=&NYP.Composer--="
-				call = baseurl + datatable + parameters + '&token=' + token
-				api_call(call,'Program - clear old metadata',ID)
-				
-				# update program metadata with token as a parameter and dict as body
-				action = 'Documents.Virtual-folder.Program:Update'
-				params = {'token': token}
-				url = baseurl + datatable + action
-				api_call(url,'Program - add new metadata',ID,params,data)
+					# clear values from program folders
+					parameters = f"Documents.Virtual-folder.Program:Update?CoreField.Legacy-Identifier={ID}&NYP.Season--=&NYP.Program-Date(s)--=&NYP.Program-Times--=&NYP.Location--=&NYP.Venue--=&NYP.Event-Type--=&NYP.Composer/Work--=&NYP.Soloist--=&NYP.Conductor--=&NYP.Composer--="
+					call = baseurl + datatable + parameters + '&token=' + token
+					api_call(call,'Program - clear old metadata',ID)
+					
+					# update program metadata with token as a parameter and dict as body
+					action = 'Documents.Virtual-folder.Program:Update'
+					params = {'token': token}
+					url = baseurl + datatable + action
+					api_call(url,'Program - add new metadata',ID,params,data)
 
-				count += 1
-				percent = round(count/total, 4)*100
+					count += 1
+					percent = round(count/total, 4)*100
 
 	file.close()
 	logger.info('Done')
@@ -251,22 +253,20 @@ def update_folders(token):
 def create_sources(token):
 	logger.info('Creating/updating Source records...')
 
-	with open(directory+'source_accounts_composers.csv', 'r', encoding="UTF-8") as file:
+	with open(f'{directory}source_accounts_composers.csv', 'r', encoding="UTF-8") as file:
 		csvfile = csv.reader(file)
 		next(csvfile)
 
 		for row in csvfile:
 			COMPOSER_ID = row[0]
-			DISPLAY = row[1]
-			DISPLAY_url = quote(DISPLAY, encoding='UTF-8')
-			FIRST = row[2].replace('"',"'").replace('&','and')
+			FIRST = row[1].replace('"',"'").replace('&','and')
 			FIRST_url = quote(FIRST, encoding='UTF-8')
-			MIDDLE = row[3]
+			MIDDLE = row[2]
 			MIDDLE_url = quote(MIDDLE, encoding='UTF-8')
-			LAST = row[4].replace('"',"'").replace('&','and')
+			LAST = row[3].replace('"',"'").replace('&','and')
 			LAST_url = quote(LAST, encoding='UTF-8')
-			BIRTH = row[5]
-			DEATH = row[6]
+			BIRTH = row[4]
+			DEATH = row[5]
 			ROLES = []
 
 			# We want to preserve the Role field for our Source, which may have other data
@@ -284,7 +284,7 @@ def create_sources(token):
 
 			if 'Composer' not in ROLES:
 				ROLES.append('Composer')
-				logger.info(f'Adding Composer role to {DISPLAY}')
+				logger.info(f'Adding Composer role to {FIRST} {LAST}')
 			
 			ROLES = ('|').join(ROLES)
 
@@ -301,19 +301,17 @@ def create_sources(token):
 
 		for row in csvfile:
 			ARTIST_ID = row[0]
-			DISPLAY = row[1]
-			DISPLAY_url = quote(DISPLAY, encoding='UTF-8')
-			FIRST = row[2].replace('"',"'").replace('&','and')
+			FIRST = row[1].replace('"',"'").replace('&','and')
 			FIRST_url = quote(FIRST, encoding='UTF-8')
-			MIDDLE = row[3]
+			MIDDLE = row[2]
 			MIDDLE_url = quote(MIDDLE, encoding='UTF-8')
-			LAST = row[4].replace('"',"'").replace('&','and')
+			LAST = row[3].replace('"',"'").replace('&','and')
 			LAST_url = quote(LAST, encoding='UTF-8')
-			BIRTH = row[5]
-			DEATH = row[6]
-			ROLES = row[7]
-			ORCHESTRA = row[8]
-			ORCHESTRA_YEARS = row[9]
+			BIRTH = row[4]
+			DEATH = row[5]
+			ROLES = row[6]
+			ORCHESTRA = row[7]
+			ORCHESTRA_YEARS = row[8]
 
 			# We want to preserve the Role field for our Source, which may have other data
 			# So we'll do a Read for each Source, grab the Role field, then add any new values to it
@@ -334,7 +332,7 @@ def create_sources(token):
 					new_roles = ROLES.split('|')
 					for role in new_roles:
 						if role not in existing_roles and role != '':
-							logger.info(f'Adding new role {role} to {DISPLAY}')
+							logger.info(f'Adding new role {role} to {FIRST} {LAST}')
 							existing_roles.append(role)
 					ROLES = ('|').join(existing_roles)
 	
@@ -813,11 +811,11 @@ if token and token != '':
 	logger.info(f'We have a token: {token} Proceeding...')
 	print(f'Your token is: {token}')
 
-	make_folders(token)
+	# make_folders(token)
 	update_folders(token)
-	create_sources(token)
-	add_sources_to_program(token)
-	library_updates(token)
+	# create_sources(token)
+	# add_sources_to_program(token)
+	# library_updates(token)
 
 	logger.info('ALL DONE! Bye bye :)')
 

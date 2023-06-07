@@ -27,12 +27,20 @@ def make_folders(data,all_data):
 	for program in data:
 
 		folder = {}
-		folder['season'] = data[program]['SEASON']
+		season = data[program]['SEASON']
+
+		# fix for 1899-00 and 1999-00
+		if season.endswith('00'):
+			year = season.split('-')[0]
+			next_year = str(int(year) + 1)
+			season = year + '-' + next_year.zfill(2)
+
+		folder['season'] = season
 		folder['program_id'] = program
 
 		# do we have a week number?
 		if data[program]['WEEK'] != '':
-			week = 'Wk ' + data[program]['WEEK'] + ' / '
+			week = f'Wk {data[program]["WEEK"]} / '
 		else:
 			week = ''
 
@@ -59,7 +67,7 @@ def make_folders(data,all_data):
 			sub_event = ' / ' + sub_event
 
 		# build the folder name
-		folder['folder_name'] =	week + date + star + sub_event + conductor
+		folder['folder_name'] =	f'{week}{date}{star}{sub_event}{conductor}'
 		
 		# finally, add it to the list
 		folders.append(folder)
@@ -103,7 +111,6 @@ def sources(data):
 			if conductor != '' and int(conductor) not in artists:
 				artists[int(conductor)] = {
 					'Artist ID': conductor,
-					'Display Name': bytes(data[program]['CONDUCTOR_NAMES'].split('|')[i], 'iso-8859-1').decode('utf-8'),
 					'First Name': bytes(data[program]['CONDUCTOR_FIRST_NAME'].split('|')[i], 'iso-8859-1').decode('utf-8'),
 					'Middle Name': bytes(data[program]['CONDUCTOR_MIDDLE_NAME'].split('|')[i], 'iso-8859-1').decode('utf-8'),
 					'Last Name': bytes(data[program]['CONDUCTOR_LAST_NAME'].split('|')[i], 'iso-8859-1').decode('utf-8'),
@@ -144,7 +151,6 @@ def sources(data):
 			if soloistID is not None and soloistID not in artists:
 				artists[soloistID] = {
 					'Artist ID': soloist,
-					'Display Name': bytes(data[program]['SOLOIST_NAME'].split('|')[i], 'iso-8859-1').decode('utf-8'),
 					'First Name': bytes(data[program]['SOLOIST_FIRST_NAME'].split('|')[i], 'iso-8859-1').decode('utf-8'),
 					'Middle Name': bytes(data[program]['SOLOIST_MIDDLE_NAME'].split('|')[i], 'iso-8859-1').decode('utf-8'),
 					'Last Name': bytes(data[program]['SOLOIST_LAST_NAME'].split('|')[i], 'iso-8859-1').decode('utf-8'),
@@ -175,7 +181,6 @@ def sources(data):
 			if composer != '' and int(composer) not in composers:
 				composers[int(composer)] = {
 					'Composer ID': composer,
-					'Display Name': bytes(data[program]['COMPOSER_NAME'].split('|')[i], 'iso-8859-1').decode('utf-8').replace('  ',' '),
 					'First Name': bytes(data[program]['COMPOSER_FIRST_NAME'].split('|')[i], 'iso-8859-1').decode('utf-8'),
 					'Middle Name': bytes(data[program]['COMPOSER_MIDDLE_NAME'].split('|')[i], 'iso-8859-1').decode('utf-8'),
 					'Last Name': bytes(data[program]['COMPOSER_LAST_NAME'].split('|')[i], 'iso-8859-1').decode('utf-8'),
@@ -264,6 +269,14 @@ def program_data(data):
 	print('Creating Program Data output file...')
 
 	for program in data:
+
+		# fix for 1899-00 and 1999-00
+		season = data[program]['SEASON']
+		if season.endswith('00'):
+			year = season.split('-')[0]
+			next_year = str(int(year) + 1)
+			season = year + '-' + next_year.zfill(2)
+			data[program]['SEASON'] = season
 		
 		# clean up whitespace around "New York Philharmonic", etc
 		data[program]['ORCHESTRA_NAME'] = data[program]['ORCHESTRA_NAME'].strip()
