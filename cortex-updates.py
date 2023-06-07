@@ -212,7 +212,7 @@ def update_folders(token):
 						'CoreField.Legacy-Identifier': ID,
 						'NYP.Season+': SEASON,
 						'NYP.Week+:': WEEK,
-						'NYP.Orchestra:': ORCHESTRA_NAME,
+						'NYP.Orchestra+:': ORCHESTRA_NAME,
 						'NYP.Program-Date(s)++': DATE,
 						'NYP.Program-Date-Range:': DATE_RANGE,
 						'NYP.Program-Times++': PERFORMANCE_TIME,
