@@ -199,6 +199,7 @@ def update_folders(token):
 					response = response.json()
 					if response["response"]["numFound"] == 1:
 						digarch_id = response["response"]["docs"][0]["id"]
+						logger.info(f'Digital archives ID is {digarch_id}')
 					else:
 						digarch_id = ''
 				else:
