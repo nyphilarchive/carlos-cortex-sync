@@ -189,12 +189,10 @@ def update_folders(token):
 				except HTTPError as http_err:
 					logger.error(f'Failed to get Solr data for program {ID} - HTTP error occurred: {http_err}')
 				except Exception as err:
-					logger.error(f'Failed to get Solr data for program {ID} - Other error occurred: {err}')
-				else:
-					logger.info(f'Success retrieving Solr data for program {ID}')
-					response = ''
+					logger.error(f'Failed to get Solr data for program {ID} - Other error occurred: {err}')			
 
 				if response:
+					logger.info(f'Success retrieving Solr data for program {ID}')
 					# parse JSON results
 					response = response.json()
 					if response["response"]["numFound"] == 1:
@@ -204,9 +202,10 @@ def update_folders(token):
 						digarch_id = ''
 				else:
 					digarch_id = ''
+					logger.error(f'Failed to get Solr data for program {ID}')
 
 				# if ID in update_list:
-				if ID !='':
+				if ID:
 
 					# Create the dict
 					data = {
@@ -227,6 +226,7 @@ def update_folders(token):
 					}
 					# fix for linebreaks and such - dump to string and load back to JSON
 					data = json.dumps(data)
+					logger.info(data)
 					data = json.loads(data)
 
 					# log some info
