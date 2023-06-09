@@ -202,8 +202,8 @@ def update_folders(token):
 				digarch_id = ''
 				logger.error(f'Failed to get Solr data for program {ID}')
 
-			# if ID in update_list:
-			if ID:
+			if ID in ['3853','13835','2566','14865','14866','14867','14868','14869','14877'] or SEASON == '1999-2000':
+			# if ID:
 
 				# Create the dict
 				data = {
@@ -231,9 +231,9 @@ def update_folders(token):
 				logger.info(f'Updating Program {count} of {total} = {percent}% complete')
 
 				# clear values from program folders
-				parameters = f"Documents.Virtual-folder.Program:Update?CoreField.Legacy-Identifier={ID}&NYP.Season--=&NYP.Program-Date(s)--=&NYP.Program-Times--=&NYP.Location--=&NYP.Venue--=&NYP.Event-Type--=&NYP.Composer/Work--=&NYP.Soloist--=&NYP.Conductor--=&NYP.Composer--="
-				call = baseurl + datatable + parameters + '&token=' + token
-				api_call(call,'Program - clear old metadata',ID)
+				# parameters = f"Documents.Virtual-folder.Program:Update?CoreField.Legacy-Identifier={ID}&NYP.Season--=&NYP.Program-Date(s)--=&NYP.Program-Times--=&NYP.Location--=&NYP.Venue--=&NYP.Event-Type--=&NYP.Composer/Work--=&NYP.Soloist--=&NYP.Conductor--=&NYP.Composer--="
+				# call = baseurl + datatable + parameters + '&token=' + token
+				# api_call(call,'Program - clear old metadata',ID)
 				
 				# update program metadata with token as a parameter and dict as body
 				action = 'Documents.Virtual-folder.Program:Update'
@@ -287,8 +287,7 @@ def create_sources(token):
 			
 			ROLES = ('|').join(ROLES)
 
-			# parameters = f"Contacts.Source.Default:CreateOrUpdate?CoreField.Composer-ID={COMPOSER_ID}&CoreField.First-name:={FIRST_url}&CoreField.Middle-initial:={MIDDLE_url}&CoreField.Last-name:={LAST_url}&CoreField.Birth-Year:={BIRTH}&CoreField.Death-Year:={DEATH}&CoreField.Role:={ROLES}"
-			parameters = f"Contacts.Source.Default:CreateOrUpdate?CoreField.Composer-ID={COMPOSER_ID}&CoreField.Role:={ROLES}"
+			parameters = f"Contacts.Source.Default:CreateOrUpdate?CoreField.Composer-ID={COMPOSER_ID}&CoreField.First-name:={FIRST_url}&CoreField.Middle-initial:={MIDDLE_url}&CoreField.Last-name:={LAST_url}&CoreField.Birth-Year:={BIRTH}&CoreField.Death-Year:={DEATH}&CoreField.Role:={ROLES}"
 			call = f"{baseurl}{datatable}{parameters}&token={token}"
 			api_call(call,'Source: Composer',COMPOSER_ID)
 	file.close()
@@ -336,8 +335,7 @@ def create_sources(token):
 							existing_roles.append(role)
 					ROLES = ('|').join(existing_roles)
 	
-			# parameters = f"Contacts.Source.Default:CreateOrUpdate?CoreField.Artist-ID={ARTIST_ID}&CoreField.First-name:={FIRST_url}&CoreField.Middle-initial:={MIDDLE_url}&CoreField.Last-name:={LAST_url}&CoreField.Birth-Year:={BIRTH}&CoreField.Death-Year:={DEATH}&CoreField.Role:={ROLES}&CoreField.Orchestra-Membership:={ORCHESTRA}&CoreField.Orchestra-Membership-Year:={ORCHESTRA_YEARS}"
-			parameters = f"Contacts.Source.Default:CreateOrUpdate?CoreField.Artist-ID={ARTIST_ID}&CoreField.Role:={ROLES}"
+			parameters = f"Contacts.Source.Default:CreateOrUpdate?CoreField.Artist-ID={ARTIST_ID}&CoreField.First-name:={FIRST_url}&CoreField.Middle-initial:={MIDDLE_url}&CoreField.Last-name:={LAST_url}&CoreField.Birth-Year:={BIRTH}&CoreField.Death-Year:={DEATH}&CoreField.Role:={ROLES}&CoreField.Orchestra-Membership:={ORCHESTRA}&CoreField.Orchestra-Membership-Year:={ORCHESTRA_YEARS}"
 			call = f"{baseurl}{datatable}{parameters}&token={token}"
 			api_call(call,'Source: Artist',ARTIST_ID)
 
@@ -803,8 +801,6 @@ logger.addHandler(handler)
 logger.info('=======================')
 logger.info('Script started...')
 
-# update_list = ['7878','7877']
-
 # Run the auth function to get a token
 token = auth()
 
@@ -813,9 +809,9 @@ if token and token != '':
 	print(f'Your token is: {token}')
 
 	# make_folders(token)
-	# update_folders(token)
+	update_folders(token)
 	# create_sources(token)
-	add_sources_to_program(token)
+	# add_sources_to_program(token)
 	# library_updates(token)
 
 	logger.info('ALL DONE! Bye bye :)')
