@@ -202,47 +202,44 @@ def update_folders(token):
 				digarch_id = ''
 				logger.error(f'Failed to get Solr data for program {ID}')
 
-			if ID in ['3853','13835','2566','14865','14866','14867','14868','14869','14877'] or SEASON == '1999-2000':
-			# if ID:
+			# Create the dict
+			data = {
+				'CoreField.Legacy-Identifier': ID,
+				'NYP.Season+': SEASON,
+				'NYP.Week+:': WEEK,
+				'NYP.Orchestra+:': ORCHESTRA_NAME,
+				'NYP.Program-Date(s)++': DATE,
+				'NYP.Program-Date-Range:': DATE_RANGE,
+				'NYP.Program-Times++': PERFORMANCE_TIME,
+				'NYP.Location++': LOCATION_NAME,
+				'NYP.Venue++': VENUE_NAME,
+				'NYP.Event-Type++': SUB_EVENT_NAMES,
+				'NYP.Composer/Work++': COMPOSER_TITLE_SHORT,
+				'NYP.Composer/Work-Full-Title:': COMPOSER_TITLE,
+				'NYP.Notes-on-program:': NOTES_XML,
+				'NYP.Digital-Archives-ID:': digarch_id,
+			}
+			# fix for linebreaks and such - dump to string and load back to JSON
+			data = json.dumps(data)
+			logger.info(data)
+			data = json.loads(data)
 
-				# Create the dict
-				data = {
-					'CoreField.Legacy-Identifier': ID,
-					'NYP.Season+': SEASON,
-					'NYP.Week+:': WEEK,
-					'NYP.Orchestra+:': ORCHESTRA_NAME,
-					'NYP.Program-Date(s)++': DATE,
-					'NYP.Program-Date-Range:': DATE_RANGE,
-					'NYP.Program-Times++': PERFORMANCE_TIME,
-					'NYP.Location++': LOCATION_NAME,
-					'NYP.Venue++': VENUE_NAME,
-					'NYP.Event-Type++': SUB_EVENT_NAMES,
-					'NYP.Composer/Work++': COMPOSER_TITLE_SHORT,
-					'NYP.Composer/Work-Full-Title:': COMPOSER_TITLE,
-					'NYP.Notes-on-program:': NOTES_XML,
-					'NYP.Digital-Archives-ID:': digarch_id,
-				}
-				# fix for linebreaks and such - dump to string and load back to JSON
-				data = json.dumps(data)
-				logger.info(data)
-				data = json.loads(data)
+			# log some info
+			logger.info(f'Updating Program {count} of {total} = {percent}% complete')
 
-				# log some info
-				logger.info(f'Updating Program {count} of {total} = {percent}% complete')
+			# clear values from program folders
+			# parameters = f"Documents.Virtual-folder.Program:Update?CoreField.Legacy-Identifier={ID}&NYP.Season--=&NYP.Program-Date(s)--=&NYP.Program-Times--=&NYP.Location--=&NYP.Venue--=&NYP.Event-Type--=&NYP.Composer/Work--=&NYP.Soloist--=&NYP.Conductor--=&NYP.Composer--="
+			# call = baseurl + datatable + parameters + '&token=' + token
+			# api_call(call,'Program - clear old metadata',ID)
+			
+			# update program metadata with token as a parameter and dict as body
+			action = 'Documents.Virtual-folder.Program:Update'
+			params = {'token': token}
+			url = baseurl + datatable + action
+			api_call(url,'Program - add new metadata',ID,params,data)
 
-				# clear values from program folders
-				# parameters = f"Documents.Virtual-folder.Program:Update?CoreField.Legacy-Identifier={ID}&NYP.Season--=&NYP.Program-Date(s)--=&NYP.Program-Times--=&NYP.Location--=&NYP.Venue--=&NYP.Event-Type--=&NYP.Composer/Work--=&NYP.Soloist--=&NYP.Conductor--=&NYP.Composer--="
-				# call = baseurl + datatable + parameters + '&token=' + token
-				# api_call(call,'Program - clear old metadata',ID)
-				
-				# update program metadata with token as a parameter and dict as body
-				action = 'Documents.Virtual-folder.Program:Update'
-				params = {'token': token}
-				url = baseurl + datatable + action
-				api_call(url,'Program - add new metadata',ID,params,data)
-
-				count += 1
-				percent = round(count/total, 4)*100
+			count += 1
+			percent = round(count/total, 4)*100
 
 	file.close()
 	logger.info('Done')
@@ -808,11 +805,11 @@ if token and token != '':
 	logger.info(f'We have a token: {token} Proceeding...')
 	print(f'Your token is: {token}')
 
-	# make_folders(token)
+	make_folders(token)
 	update_folders(token)
-	# create_sources(token)
-	# add_sources_to_program(token)
-	# library_updates(token)
+	create_sources(token)
+	add_sources_to_program(token)
+	library_updates(token)
 
 	logger.info('ALL DONE! Bye bye :)')
 
