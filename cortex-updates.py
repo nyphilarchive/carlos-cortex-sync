@@ -228,9 +228,9 @@ def update_folders(token):
 			logger.info(f'Updating Program {count} of {total} = {percent}% complete')
 
 			# clear values from program folders
-			# parameters = f"Documents.Virtual-folder.Program:Update?CoreField.Legacy-Identifier={ID}&NYP.Season--=&NYP.Program-Date(s)--=&NYP.Program-Times--=&NYP.Location--=&NYP.Venue--=&NYP.Event-Type--=&NYP.Composer/Work--=&NYP.Soloist--=&NYP.Conductor--=&NYP.Composer--="
-			# call = baseurl + datatable + parameters + '&token=' + token
-			# api_call(call,'Program - clear old metadata',ID)
+			parameters = f"Documents.Virtual-folder.Program:Update?CoreField.Legacy-Identifier={ID}&NYP.Season--=&NYP.Program-Date(s)--=&NYP.Program-Times--=&NYP.Location--=&NYP.Venue--=&NYP.Event-Type--=&NYP.Composer/Work--=&NYP.Soloist--=&NYP.Conductor--=&NYP.Composer--="
+			call = baseurl + datatable + parameters + '&token=' + token
+			api_call(call,'Program - clear old metadata',ID)
 			
 			# update program metadata with token as a parameter and dict as body
 			action = 'Documents.Virtual-folder.Program:Update'
