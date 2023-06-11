@@ -17,14 +17,8 @@ directory = os.environ.get('export', 'default')
 
 def make_folders(data,all_data):
 # create csv of virtual folder names
-# for programs with related programs only the one with the primary flag should get a top-level folder
-# the other related programs should be child folders
 
 	print('Creating Virtual Folder output file...')
-
-	# get the list of Season folders and their Cortex IDs
-	season_file = csv.DictReader(open(directory+'cortex-seasons.csv'))
-	seasons = {row['season']: row['id'] for row in season_file}
 
 	# set up the folder list
 	folders = []
@@ -32,88 +26,51 @@ def make_folders(data,all_data):
 	# loop through the Carlos data
 	for program in data:
 
-		# only create folders for seasons that are already in Cortex
-		# you may need to run a new Cortex report for season folders
-		# go to Programs top-level folder, turn off "see thru", filter for Containers only, run report
+		folder = {}
 		season = data[program]['SEASON']
-		if season in seasons:
-			folder = {}
-			folder['season_folder_id'] = seasons[season]
-			folder['program_id'] = program
 
-			# do we have a week number?
-			if data[program]['WEEK'] != '':
-				week = 'Wk ' + data[program]['WEEK'] + ' / '
-			else:
-				week = ''
+		# fix for 1899-00 and 1999-00
+		if season.endswith('00'):
+			year = season.split('-')[0]
+			next_year = str(int(year) + 1)
+			season = year + '-' + next_year.zfill(2)
 
-			# check for multiple dates or if a primary folder; if yes add a star
-			if '|' in data[program]['DATE']:
-				star = '*'
-			elif data[program]['PRIMARY_PROGRAM_FLAG'] == 'Primary':
-				star = '*'
-			else:
-				star = ''
+		folder['season'] = season
+		folder['program_id'] = program
 
-			# get the date
-			date = data[program]['DATE_RANGE'][0:10]
+		# do we have a week number?
+		if data[program]['WEEK'] != '':
+			week = f'Wk {data[program]["WEEK"]} / '
+		else:
+			week = ''
 
-			# clean up conductor name
-			conductor = data[program]['CONDUCTOR_LAST_NAME'].split('|')[0]
-			conductor = bytes(conductor,'iso-8859-1').decode('utf-8')
-			conductor = re.sub("\\[.*?\\]","",conductor)
-			conductor = re.sub("\\(.*?\\)","",conductor)
-			if conductor != '':
-				conductor = ' / ' + conductor.strip()
+		# check for multiple dates; if yes add a star
+		if '|' in data[program]['DATE']:
+			star = '*'
+		else:
+			star = ''
 
-			# clean up sub event
-			sub_event = data[program]['SUB_EVENT_NAMES'].split('|')[0].replace('Subscription Season', 'Sub').replace('Non-Subscription', 'Non-Sub').strip()
-			if sub_event != '':
-				sub_event = ' / ' + sub_event
+		# get the date
+		date = data[program]['DATE_RANGE'][0:10]
 
-			# build the folder name
-			folder['folder_name'] =	week + date + star + sub_event + conductor
+		# clean up conductor name
+		conductor = data[program]['CONDUCTOR_LAST_NAME'].split('|')[0]
+		conductor = bytes(conductor,'iso-8859-1').decode('utf-8')
+		conductor = re.sub("\\[.*?\\]","",conductor)
+		conductor = re.sub("\\(.*?\\)","",conductor)
+		if conductor != '':
+			conductor = ' / ' + conductor.strip()
 
-			# should this be a primary or secondary folder?
-			# if it has no related programs it's a primary
-			if data[program]['RELATED_PROG_IDS'] == '':
-				folder['level'] = 'primary'
-				folder['parent_program_id'] = ''
-			# if it has the Primary flag it's a primary
-			elif data[program]['PRIMARY_PROGRAM_FLAG'] == 'Primary':
-				folder['level'] = 'primary'
-				folder['parent_program_id'] = ''
-			# otherwise it's a secondary
-			else:
-				folder['level'] = 'secondary'
+		# clean up sub event
+		sub_event = data[program]['SUB_EVENT_NAMES'].split('|')[0].replace('Subscription Season', 'Sub').replace('Non-Subscription', 'Non-Sub').strip()
+		if sub_event != '':
+			sub_event = ' / ' + sub_event
 
-
-			# if it's a secondary, get the primary ID
-			# look in all_data because the primary might not be included in the update csv
-			if folder['level'] == 'secondary':
-				
-				# get the related program IDs
-				# loop through them and determine which one is the primary
-				related = []
-				also_related = []
-				if '|' in all_data[program]['RELATED_PROG_IDS']:
-					related = all_data[program]['RELATED_PROG_IDS'].split('|')
-				else:
-					related = [all_data[program]['RELATED_PROG_IDS']]
-				for x in related:
-					if x in all_data and all_data[x]['PRIMARY_PROGRAM_FLAG'] == 'Primary':
-						folder['parent_program_id'] = x
-					elif x in all_data:
-						also_related += all_data[x]['RELATED_PROG_IDS'].split('|')
-				
-				# if we didn't get a parent_program_id, check the also related list
-				if 'parent_program_id' not in folder and len(also_related) > 0:
-					for y in also_related:
-						if y != '' and all_data[y]['PRIMARY_PROGRAM_FLAG'] == 'Primary':
-							folder['parent_program_id'] = y
-			
-			# finally, add it to the list
-			folders.append(folder)
+		# build the folder name
+		folder['folder_name'] =	f'{week}{date}{star}{sub_event}{conductor}'
+		
+		# finally, add it to the list
+		folders.append(folder)
 
 	# with open(directory+'cortex_folder_names.json', 'w', encoding='UTF-8') as jsonfile:
 	# 	jsonfile.write(json.dumps(folders, indent=4))
@@ -123,11 +80,7 @@ def make_folders(data,all_data):
 		writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
 		writer.writeheader()
 		for folder in folders:
-			if folder['level'] == 'primary':
-				writer.writerow(folder)
-		for folder in folders:
-			if folder['level'] == 'secondary':
-				writer.writerow(folder)
+			writer.writerow(folder)
 
 	print('Done')
 
@@ -158,7 +111,6 @@ def sources(data):
 			if conductor != '' and int(conductor) not in artists:
 				artists[int(conductor)] = {
 					'Artist ID': conductor,
-					'Display Name': bytes(data[program]['CONDUCTOR_NAMES'].split('|')[i], 'iso-8859-1').decode('utf-8'),
 					'First Name': bytes(data[program]['CONDUCTOR_FIRST_NAME'].split('|')[i], 'iso-8859-1').decode('utf-8'),
 					'Middle Name': bytes(data[program]['CONDUCTOR_MIDDLE_NAME'].split('|')[i], 'iso-8859-1').decode('utf-8'),
 					'Last Name': bytes(data[program]['CONDUCTOR_LAST_NAME'].split('|')[i], 'iso-8859-1').decode('utf-8'),
@@ -199,7 +151,6 @@ def sources(data):
 			if soloistID is not None and soloistID not in artists:
 				artists[soloistID] = {
 					'Artist ID': soloist,
-					'Display Name': bytes(data[program]['SOLOIST_NAME'].split('|')[i], 'iso-8859-1').decode('utf-8'),
 					'First Name': bytes(data[program]['SOLOIST_FIRST_NAME'].split('|')[i], 'iso-8859-1').decode('utf-8'),
 					'Middle Name': bytes(data[program]['SOLOIST_MIDDLE_NAME'].split('|')[i], 'iso-8859-1').decode('utf-8'),
 					'Last Name': bytes(data[program]['SOLOIST_LAST_NAME'].split('|')[i], 'iso-8859-1').decode('utf-8'),
@@ -230,7 +181,6 @@ def sources(data):
 			if composer != '' and int(composer) not in composers:
 				composers[int(composer)] = {
 					'Composer ID': composer,
-					'Display Name': bytes(data[program]['COMPOSER_NAME'].split('|')[i], 'iso-8859-1').decode('utf-8').replace('  ',' '),
 					'First Name': bytes(data[program]['COMPOSER_FIRST_NAME'].split('|')[i], 'iso-8859-1').decode('utf-8'),
 					'Middle Name': bytes(data[program]['COMPOSER_MIDDLE_NAME'].split('|')[i], 'iso-8859-1').decode('utf-8'),
 					'Last Name': bytes(data[program]['COMPOSER_LAST_NAME'].split('|')[i], 'iso-8859-1').decode('utf-8'),
@@ -319,6 +269,14 @@ def program_data(data):
 	print('Creating Program Data output file...')
 
 	for program in data:
+
+		# fix for 1899-00 and 1999-00
+		season = data[program]['SEASON']
+		if season.endswith('00'):
+			year = season.split('-')[0]
+			next_year = str(int(year) + 1)
+			season = year + '-' + next_year.zfill(2)
+			data[program]['SEASON'] = season
 		
 		# clean up whitespace around "New York Philharmonic", etc
 		data[program]['ORCHESTRA_NAME'] = data[program]['ORCHESTRA_NAME'].strip()
@@ -328,7 +286,7 @@ def program_data(data):
 		data[program]['SOLOIST_SLASH_INSTRUMENT'] = bytes(data[program]['SOLOIST_SLASH_INSTRUMENT'], 'iso-8859-1').decode('utf-8').replace('/',' / ')
 
 		# remove some columns we don't need for this output file
-		cols_to_remove = ['PRIMARY_PROGRAM_FLAG','CONDUCTOR','CONDUCTOR_NAMES','CONDUCTOR_FIRST_NAME','CONDUCTOR_MIDDLE_NAME','CONDUCTOR_LAST_NAME','CONDUCTOR_YEAR_OF_BIRTH','CONDUCTOR_YEAR_OF_DEATH','SOLOIST','SOLOIST_INSTRUMENT','SOLOIST_YEAR_OF_BIRTH','SOLOIST_YEAR_OF_DEATH','SOLOIST_NAME','SOLOIST_FIRST_NAME','SOLOIST_MIDDLE_NAME','SOLOIST_LAST_NAME','SOLOIST_MEMBER_ORCH_NAME','SOLOIST_MEMBER_ORCH_YEARS','COMPOSER_NUMBER','COMPOSER_NAME','COMPOSER_FIRST_NAME','COMPOSER_MIDDLE_NAME','COMPOSER_LAST_NAME','COMPOSER_YEAR_OF_BIRTH','COMPOSER_YEAR_OF_DEATH','RELATED_PROG_IDS','RELATED_PROG_INFO']
+		cols_to_remove = ['PRIMARY_PROGRAM_FLAG','CONDUCTOR','CONDUCTOR_NAMES','CONDUCTOR_FIRST_NAME','CONDUCTOR_MIDDLE_NAME','CONDUCTOR_LAST_NAME','CONDUCTOR_YEAR_OF_BIRTH','CONDUCTOR_YEAR_OF_DEATH','SOLOIST','SOLOIST_INSTRUMENT','SOLOIST_YEAR_OF_BIRTH','SOLOIST_YEAR_OF_DEATH','SOLOIST_NAME','SOLOIST_FIRST_NAME','SOLOIST_MIDDLE_NAME','SOLOIST_LAST_NAME','SOLOIST_MEMBER_ORCH_NAME','SOLOIST_MEMBER_ORCH_YEARS','COMPOSER_NUMBER','COMPOSER_NAME','COMPOSER_FIRST_NAME','COMPOSER_MIDDLE_NAME','COMPOSER_LAST_NAME','COMPOSER_YEAR_OF_BIRTH','COMPOSER_YEAR_OF_DEATH','RELATED_PROG_INFO']
 		for col in cols_to_remove:
 			data[program].pop(col, None)
 
@@ -363,17 +321,10 @@ all_carlos_data = {}
 all_carlos_path = os.path.realpath(path).replace('_updates','')
 all_carlos_input = csv.DictReader(open(all_carlos_path, encoding='ISO-8859-1'))
 
-# get the list of Season folders
-season_file = csv.DictReader(open(directory+'cortex-seasons.csv'))
-seasons = []
-for row in season_file:
-	seasons.append(row['season'])
-
 # populate dictionaries
 for row in carlos_input:
 	programId = row['ID']
-	if row['SEASON'] in seasons:
-		carlos_data[programId] = row
+	carlos_data[programId] = row
 
 for row in all_carlos_input:
 	programId = row['ID']
