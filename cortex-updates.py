@@ -37,6 +37,10 @@ datatable = os.environ.get('datatable', 'default')
 library = os.environ.get('library', 'default')
 
 # Some helper functions for cleanup
+def xpath_text(element, path):
+	value = element.xpath(path)
+	return value[0] if value else ''
+
 def replace_angle_brackets(text):
     # Define a regular expression pattern to match angle brackets and the enclosed text
     pattern = r'<(.*?)>'
@@ -386,10 +390,6 @@ def add_sources_to_program(token):
 
 # Let's update Scores and Parts
 def library_updates(token):
-
-	def xpath_text(element, path):
-		value = element.xpath(path)
-		return value[0] if value else ''
 
 	# parse the XML file
 	tree = etree.parse(f'{library}library_updates.xml')
