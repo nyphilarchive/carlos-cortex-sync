@@ -388,6 +388,66 @@ def add_sources_to_program(token):
 			api_call(call,f'Add composer {Composer_ID} to Program',Program_ID)
 	file.close()
 
+def program_works(token):
+
+	# parse the XML file
+	tree = etree.parse(f'{library}program_updates.xml')
+	root = tree.getroot()
+
+	# parse each row in the XML and assign values to variables
+	for row in root.xpath(".//row"):
+		program_id = xpath_text(row, "id/text()")
+		program_works_ids = [xpath_text(tag, "text()") for tag in row.xpath("program_works_ids")]
+		works_ids = [xpath_text(tag, "text()") for tag in row.xpath("works_ids")]
+		composer_ids = [xpath_text(tag, "text()") for tag in row.xpath("composer_number")]
+		composer_names = [xpath_text(tag, "text()") for tag in row.xpath("composer_name")]
+		composer_titles = [xpath_text(tag, "text()") for tag in row.xpath("composer_title")]
+		titles_short = [xpath_text(tag, "text()") for tag in row.xpath("title_short")]
+		titles_pipes = [xpath_text(tag, "text()") for tag in row.xpath("title_pipes")] # We'll need to extract the movement title from here
+		conductors = [xpath_text(tag, "text()") for tag in row.xpath("works_conductors_ids")]
+		soloists = [xpath_text(tag, "text()") for tag in row.xpath("works_soloists_ids")]
+		soloist_names = [xpath_text(tag, "text()") for tag in row.xpath("works_soloists_names")] # We'll use this and the next field to build the soloist / instrument tag
+		soloist_instruments = [xpath_text(tag, "text()") for tag in row.xpath("works_soloists_inst_names")]
+		soloist_roles = [xpath_text(tag, "text()") for tag in row.xpath("works_soloists_functions")]
+		encores = [xpath_text(tag, "text()") for tag in row.xpath("works_encore")]
+
+		# get the length of program_works_ids so we know how many works, then use that index to match up corresponding values
+		program_work_num = len(program_works_ids)
+
+		# create a dictionary for each program_work
+		for i in range(0,program_work_num):
+			pwi = program_works_ids[i]
+			wi = works_ids[i]
+			ci = composer_ids[i]
+			cn = composer_names[i]
+			ct = composer_titles[i]
+			ts = titles_short[i]
+			tp = titles_pipes[i]
+			if len(tp.split('|')) > 1:
+				mov = tp.split('|')[1]
+			else:
+				mov = ''
+			con = conductors[i].split(';')
+			sid = soloists[i].split(';')
+			sn = soloist_names[i].split(';')
+			si = soloist_instruments[i].split(';')
+			sr = soloist_roles[i].split(';')
+			en = encores[i]
+
+			print(f'Work ID: {pwi}\n Title: {ts}\n Soloists: {sid}\n Movement: {mov}')
+
+			# create/update the work in Cortex
+
+
+			# create each program work 
+
+			# link the composer
+
+			# link the soloists (semi-colon separated values)
+			# for s in sid:
+			# 	s = s.strip()
+
+
 # Let's update Scores and Parts
 def library_updates(token):
 
@@ -805,11 +865,12 @@ if token and token != '':
 	logger.info(f'We have a token: {token} Proceeding...')
 	print(f'Your token is: {token}')
 
-	make_folders(token)
-	update_folders(token)
-	create_sources(token)
-	add_sources_to_program(token)
-	library_updates(token)
+	# make_folders(token)
+	# update_folders(token)
+	# create_sources(token)
+	# add_sources_to_program(token)
+	# library_updates(token)
+	program_works(token)
 
 	logger.info('ALL DONE! Bye bye :)')
 
