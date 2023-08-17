@@ -20,7 +20,7 @@ from urllib.parse import quote
 from os.path import join, dirname
 from requests.exceptions import HTTPError
 from dotenv import load_dotenv
-from lxml import etree
+import xml.etree.ElementTree as ET
 
 
 # First, grab credentials and other values from the .env file in the same folder as this script
@@ -41,18 +41,106 @@ def xpath_text(element, path):
 	value = element.xpath(path)
 	return value[0] if value else ''
 
+def remove_angle_brackets(text):
+	replaced_text = text.replace('&lt;','').replace('&gt;','')
+	return replaced_text
+
 def replace_angle_brackets(text):
-    # Define a regular expression pattern to match angle brackets and the enclosed text
-    pattern = r'<(.*?)>'
-    
-    # Define a replacement function that adds the appropriate HTML tags
-    def replace(match):
-        return '<em>{}</em>'.format(match.group(1))
-    
-    # Use re.sub() to replace the matched patterns with the appropriate HTML tags
-    replaced_text = re.sub(pattern, replace, text)
-    
-    return replaced_text
+	# Define a regular expression pattern to match angle brackets and the enclosed text
+	pattern = r'<(.*?)>'
+	
+	# Define a replacement function that adds the appropriate HTML tags
+	def replace(match):
+		return '<em>{}</em>'.format(match.group(1))
+	
+	# Use re.sub() to replace the matched patterns with the appropriate HTML tags
+	replaced_text = re.sub(pattern, replace, text)
+	return replaced_text
+
+def replace_spaces(text):
+	replaced_text = text.replace('  ', ' ')
+	return replaced_text
+
+# Set up our Program classes
+class ProgramWork:
+	def __init__(self, program_works_id, works_id, composer_number, composer_title_short,
+				 composer_name, title_short, title_full, movement, works_conductor_ids,
+				 works_encore, works_soloists_functions, works_soloists_ids,
+				 works_soloists_names, works_soloists_inst_names):
+		self.program_works_id = program_works_id
+		self.works_id = works_id
+		self.composer_number = composer_number
+		self.composer_title_short = composer_title_short
+		self.composer_name = composer_name
+		self.title_short = title_short
+		self.title_full = title_full
+		self.movement = movement
+		self.works_conductor_ids = works_conductor_ids
+		self.works_encore = works_encore
+		self.works_soloists_functions = works_soloists_functions
+		self.works_soloists_ids = works_soloists_ids
+		self.works_soloists_names = works_soloists_names
+		self.works_soloists_inst_names = works_soloists_inst_names
+
+class Program:
+	def __init__(self, row_element):
+		self.id = row_element.find('id').text
+		self.season = row_element.find('season').text
+		self.orchestra_name = row_element.find('orchestra_name').text
+		self.dates = [date.text for date in row_element.findall('date')]
+		self.performance_times = [time.text for time in row_element.findall('performance_time')]
+		self.location_names = [loc_name.text for loc_name in row_element.findall('location_name')]
+		self.venue_names = [venue_name.text for venue_name in row_element.findall('venue_name')]
+		self.event_type_names = [event_type.text for event_type in row_element.findall('event_type_names')]
+		self.sub_event_names = [sub_event_name.text for sub_event_name in row_element.findall('sub_event_names')]
+		self.conductor_id = row_element.find('conductor').text
+		self.soloist_id = row_element.find('soloist').text
+		self.soloist_function = row_element.find('soloist_function').text
+		self.soloist_instrument = row_element.find('soloist_instrument').text
+		self.program_works = []
+
+		program_works_ids = row_element.findall('program_works_ids')
+		works_ids = row_element.findall('works_ids')
+		composer_numbers = row_element.findall('composer_number')
+		composer_title_shorts = row_element.findall('composer_title_short')
+		composer_titles = row_element.findall('composer_title')
+		title_pipes = row_element.findall('title_pipes')
+		works_conductors_ids = row_element.findall('works_conductors_ids')
+		works_encore = row_element.findall('works_encore')
+		works_soloists_functions = row_element.findall('works_soloists_functions')
+		works_soloists_ids = row_element.findall('works_soloists_ids')
+		works_soloists_names = row_element.findall('works_soloists_names')
+		works_soloists_inst_names = row_element.findall('works_soloists_inst_names')
+		
+		for idx, program_works_id in enumerate(program_works_ids):
+			self.program_works.append(ProgramWork(
+				program_works_id.text.replace('*','-'),
+				works_ids[idx].text,
+				composer_numbers[idx].text,
+				replace_spaces(composer_title_shorts[idx].text),
+				composer_title_shorts[idx].text.split(' / ')[0],
+				composer_title_shorts[idx].text.split(' / ')[1],
+				replace_angle_brackets(title_pipes[idx].text).split(' | ')[0],
+				title_pipes[idx].text.split(' | ')[1] if ' | ' in title_pipes[idx].text else None,
+				works_conductors_ids[idx].text,
+				works_encore[idx].text,
+				works_soloists_functions[idx].text,
+				works_soloists_ids[idx].text,
+				works_soloists_names[idx].text,
+				works_soloists_inst_names[idx].text
+			))
+
+# Load XML data from a file
+file_path = f'{library}program_updates.xml'
+with open(file_path, 'r') as file:
+	xml_data = file.read()
+
+root = ET.fromstring(xml_data)
+programs = []
+
+for row_element in root.findall('row'):
+	program = Program(row_element)
+	programs.append(program)
 
 # get a new token from the Login API
 def auth():
@@ -242,6 +330,8 @@ def update_folders(token):
 			url = baseurl + datatable + action
 			api_call(url,'Program - add new metadata',ID,params,data)
 
+			# create Related Program relationships - TO DO
+
 			count += 1
 			percent = round(count/total, 4)*100
 
@@ -388,64 +478,116 @@ def add_sources_to_program(token):
 			api_call(call,f'Add composer {Composer_ID} to Program',Program_ID)
 	file.close()
 
-def program_works(token):
+def program_works(programs, token):
 
-	# parse the XML file
-	tree = etree.parse(f'{library}program_updates.xml')
-	root = tree.getroot()
+	for program in programs:
+		for work in program.program_works:
 
-	# parse each row in the XML and assign values to variables
-	for row in root.xpath(".//row"):
-		program_id = xpath_text(row, "id/text()")
-		program_works_ids = [xpath_text(tag, "text()") for tag in row.xpath("program_works_ids")]
-		works_ids = [xpath_text(tag, "text()") for tag in row.xpath("works_ids")]
-		composer_ids = [xpath_text(tag, "text()") for tag in row.xpath("composer_number")]
-		composer_names = [xpath_text(tag, "text()") for tag in row.xpath("composer_name")]
-		composer_titles = [xpath_text(tag, "text()") for tag in row.xpath("composer_title")]
-		titles_short = [xpath_text(tag, "text()") for tag in row.xpath("title_short")]
-		titles_pipes = [xpath_text(tag, "text()") for tag in row.xpath("title_pipes")] # We'll need to extract the movement title from here
-		conductors = [xpath_text(tag, "text()") for tag in row.xpath("works_conductors_ids")]
-		soloists = [xpath_text(tag, "text()") for tag in row.xpath("works_soloists_ids")]
-		soloist_names = [xpath_text(tag, "text()") for tag in row.xpath("works_soloists_names")] # We'll use this and the next field to build the soloist / instrument tag
-		soloist_instruments = [xpath_text(tag, "text()") for tag in row.xpath("works_soloists_inst_names")]
-		soloist_roles = [xpath_text(tag, "text()") for tag in row.xpath("works_soloists_functions")]
-		encores = [xpath_text(tag, "text()") for tag in row.xpath("works_encore")]
+			# clear old values, give the program work a title, and situate it within a Program
+			parameters = (
+				f"Documents.Virtual-Folder.Program-Work:CreateOrUpdate"
+				f"?CoreField.Legacy-Identifier={work.program_works_id}"
+				f"&CoreField.Title:={work.composer_title_short}"
+				f"&CoreField.Parent-folder:=[Documents.Virtual-folder.Program:CoreField.Legacy-identifier={program.id}]"
+				f"&NYP.Composer/Work--=&NYP.Conductor--=&NYP.Composer--=&NYP.Soloist--="
+			)
+			url = f"{baseurl}{datatable}{parameters}&token={token}"
+			api_call(url,'Establish Program Work',work.program_works_id)
 
-		# get the length of program_works_ids so we know how many works, then use that index to match up corresponding values
-		program_work_num = len(program_works_ids)
+			# if the work already exists in Cortex, we won't update the parent folder
+			parameters = f'CoreField.Legacy-Identifier:WORK_{work.works_id} DocSubType:Work&format=json'
+			query = f'{baseurl}/API/search/v3.0/search?query={parameters}&token={token}'
+			try:
+				r = requests.get(query)
+			except:
+				logger.warning(f'Unable to find Program ID {program_id}')
+				pass
 
-		# create a dictionary for each program_work
-		for i in range(0,program_work_num):
-			pwi = program_works_ids[i]
-			wi = works_ids[i]
-			ci = composer_ids[i]
-			cn = composer_names[i]
-			ct = composer_titles[i]
-			ts = titles_short[i]
-			tp = titles_pipes[i]
-			if len(tp.split('|')) > 1:
-				mov = tp.split('|')[1]
+			if r:
+				r_data = r.json()
+				if r_data['APIResponse']['GlobalInfo']['TotalCount'] == 1:
+					# We got one result, which is good
+					exists = True
+				
+				else:
+					# We have no result, so this is probably a new work
+					exists = False
 			else:
-				mov = ''
-			con = conductors[i].split(';')
-			sid = soloists[i].split(';')
-			sn = soloist_names[i].split(';')
-			si = soloist_instruments[i].split(';')
-			sr = soloist_roles[i].split(';')
-			en = encores[i]
+				exists = False
+				logger.warning(f'Unable to find Program ID {program_id}')
 
-			print(f'Work ID: {pwi}\n Title: {ts}\n Soloists: {sid}\n Movement: {mov}')
+			"""
+			Now we can compare the parent_id from Cortex to the CSV
+			If the values match, do not update this field
+			"""
+			if exists == True:
+				assign_parent = ''
+			else:
+				assign_parent = f'&CoreField.Parent-folder:=[Documents.All:CoreField.Identifier=PH1QHU6]'
 
 			# create/update the work in Cortex
+			parameters = (
+				f"Documents.Virtual-folder.Work:CreateOrUpdate"
+				f"?CoreField.Legacy-Identifier=WORK_{work.works_id}"
+				f"&NYP.Works-ID:={work.works_id}"
+				f"&CoreField.Title:={work.composer_title_short}"
+				f"{assign_parent}"
+				f"&NYP.Work-Title-Full:={work.title_full}"
+				f"&NYP.Work-Title-Short:={work.title_short}"
+			)
+			url = f"{baseurl}{datatable}{parameters}&token={token}"
+			api_call(url,'Update the Work',work.works_id)
 
+			# link work to program work
+			parameters = (
+				f"Documents.Virtual-Folder.Program-work:Update"
+				f"?CoreField.Legacy-Identifier={work.program_works_id}"
+				f"&NYP.Composer-/-Work+=[Documents.Virtual-folder.Work:CoreField.Legacy-identifier=WORK_{work.works_id}]"
+			)
+			url = f"{baseurl}{datatable}{parameters}&token={token}"
+			api_call(url,f'Link Work {work.works_id} to Program Work',work.program_works_id)
 
-			# create each program work 
+			# add metadata to each program work
+			parameters = (
+				f"Documents.Virtual-Folder.Program-work:Update"
+				f"?CoreField.Legacy-Identifier={work.program_works_id}"
+				f"&NYP.Composer/Work++={work.composer_title_short}"
+				f"&NYP.Composer/Work-Full-Title:={work.composer_name} / {work.title_full}"
+				f"&NYP.Movement:={work.movement}"
+			)
+			url = f"{baseurl}{datatable}{parameters}&token={token}"
+			api_call(url,'Add metadata to Program Work',work.program_works_id)
 
-			# link the composer
+			# link the composer to the program work
+			parameters = (
+				f"Documents.Virtual-Folder.Program-work:Update"
+				f"?CoreField.Legacy-Identifier={work.program_works_id}"
+				f"&NYP.Composer+=[Contacts.Source.Default:CoreField.Composer-ID={work.composer_number}]"
+			)
+			url = f"{baseurl}{datatable}{parameters}&token={token}"
+			api_call(url,f'Link Composer {work.composer_number} to Program Work',work.program_works_id)
 
 			# link the soloists (semi-colon separated values)
-			# for s in sid:
-			# 	s = s.strip()
+			if work.works_soloists_ids is not None:
+			    for soloist in work.works_soloists_ids.split(';'):
+			        parameters = (
+			            f"Documents.Virtual-Folder.Program-work:Update"
+			            f"?CoreField.Legacy-Identifier={work.program_works_id}"
+			            f"&NYP.Soloist+=[Contacts.Source.Default:CoreField.Artist-ID={soloist.strip()}]"
+			        )
+			        url = f"{baseurl}{datatable}{parameters}&token={token}"
+			        api_call(url, f'Link Soloist {soloist} to Program Work', work.program_works_id)
+
+			# link the conductors
+			if work.works_conductor_ids is not None:
+				for conductor in work.works_conductor_ids.split(';'):
+					parameters = (
+						f"Documents.Virtual-Folder.Program-work:Update"
+						f"?CoreField.Legacy-Identifier={work.program_works_id}"
+						f"&NYP.Conductor+=[Contacts.Source.Default:CoreField.Artist-ID={conductor.strip()}]"
+					)
+					url = f"{baseurl}{datatable}{parameters}&token={token}"
+					api_call(url,f'Link Conductor {conductor} to Program Work',work.program_works_id)
 
 
 # Let's update Scores and Parts
@@ -491,12 +633,12 @@ def library_updates(token):
 		part_marking_ids = row.xpath("part_marking_ids")
 		part_marking_ids_list = []
 		for tag in part_marking_ids:
-		    text = tag.text.strip() if tag.text else ""
-		    if text:
-		        values = [val.strip() for val in text.split(";")]
-		        part_marking_ids_list.append(values if len(values) > 1 else values[0])
-		    else:
-		        part_marking_ids_list.append("")
+			text = tag.text.strip() if tag.text else ""
+			if text:
+				values = [val.strip() for val in text.split(";")]
+				part_marking_ids_list.append(values if len(values) > 1 else values[0])
+			else:
+				part_marking_ids_list.append("")
 		
 		# Determine the display "suffix" for the asset title
 		if score_id_display and part_id_display[0]:
@@ -773,51 +915,51 @@ def library_updates(token):
 	logger.info('All done with Printed Music updates!')
 
 def api_call(url, asset_type, ID, params=None, data=None):
-    # Set the maximum number of attempts to make the call
-    max_attempts = 2
+	# Set the maximum number of attempts to make the call
+	max_attempts = 2
 
-    # Set the initial number of attempts to 0
-    attempts = 0
+	# Set the initial number of attempts to 0
+	attempts = 0
 
-    # Set a flag to indicate whether the call was successful
-    success = False
+	# Set a flag to indicate whether the call was successful
+	success = False
 
-    # Continue making the call until it is successful, or until the maximum number of attempts has been reached
-    while not success and attempts < max_attempts:
-        try:
-            # Import the requests module
-            import requests
+	# Continue making the call until it is successful, or until the maximum number of attempts has been reached
+	while not success and attempts < max_attempts:
+		try:
+			# Import the requests module
+			import requests
 
-            # Make the API call with the provided params and data
-            response = requests.post(url, params=params, data=data)
+			# Make the API call with the provided params and data
+			response = requests.post(url, params=params, data=data)
 
-            # If the response was successful, no Exception will be raised
-            response.raise_for_status()
+			# If the response was successful, no Exception will be raised
+			response.raise_for_status()
 
-            # If no exceptions were raised, the call was successful
-            success = True
-        except ImportError as import_err:
-            # Handle errors that occur when importing the requests module
-            logger.error(f'Failed to import the requests module: {import_err}')
-        except HTTPError as http_err:
-            # Handle HTTP errors
-            logger.error(f'Failed: {asset_type} {ID} - HTTP error occurred: {http_err}')
+			# If no exceptions were raised, the call was successful
+			success = True
+		except ImportError as import_err:
+			# Handle errors that occur when importing the requests module
+			logger.error(f'Failed to import the requests module: {import_err}')
+		except HTTPError as http_err:
+			# Handle HTTP errors
+			logger.error(f'Failed: {asset_type} {ID} - HTTP error occurred: {http_err}')
 
-            # Increment the number of attempts
-            attempts += 1
+			# Increment the number of attempts
+			attempts += 1
 
-            # If the maximum number of attempts has been reached, raise an exception to stop the loop
-            if attempts >= max_attempts:
-            	# raise
-                logger.error('Moving on...')
-                pass
-        except Exception as err:
-            # Handle all other errors
-            logger.error(f'Failed: {asset_type} {ID} - Other error occurred: {err}')
+			# If the maximum number of attempts has been reached, raise an exception to stop the loop
+			if attempts >= max_attempts:
+				# raise
+				logger.error('Moving on...')
+				pass
+		except Exception as err:
+			# Handle all other errors
+			logger.error(f'Failed: {asset_type} {ID} - Other error occurred: {err}')
 
-    # If the loop exited successfully, the call was successful
-    logger.info(f'Success: {asset_type} {ID}')
-    return response
+	# If the loop exited successfully, the call was successful
+	logger.info(f'Success: {asset_type} {ID}')
+	return response
 
 
 ############################
@@ -870,7 +1012,7 @@ if token and token != '':
 	# create_sources(token)
 	# add_sources_to_program(token)
 	# library_updates(token)
-	program_works(token)
+	program_works(programs, token)
 
 	logger.info('ALL DONE! Bye bye :)')
 
