@@ -61,6 +61,13 @@ def replace_spaces(text):
 	replaced_text = text.replace('  ', ' ')
 	return replaced_text
 
+def reformat_date(date_str):
+	# Convert the input date string to a datetime object
+	date_obj = datetime.strptime(date_str, '%m/%d/%Y')
+	# Format the datetime object as YYYY-MM-DD
+	formatted_date = date_obj.strftime('%Y-%m-%d')
+	return formatted_date
+
 # Set up our Program classes
 class ProgramWork:
 	def __init__(self, program_works_id, works_id, composer_number, composer_title_short,
@@ -88,6 +95,7 @@ class Program:
 		self.season = row_element.find('season').text
 		self.orchestra_name = row_element.find('orchestra_name').text
 		self.dates = [date.text for date in row_element.findall('date')]
+		self.date_range = self.get_date_range()
 		self.performance_times = [time.text for time in row_element.findall('performance_time')]
 		self.location_names = [loc_name.text for loc_name in row_element.findall('location_name')]
 		self.venue_names = [venue_name.text for venue_name in row_element.findall('venue_name')]
@@ -103,6 +111,7 @@ class Program:
 		works_ids = row_element.findall('works_ids')
 		composer_numbers = row_element.findall('composer_number')
 		composer_title_shorts = row_element.findall('composer_title_short')
+		title_shorts = row_element.findall('title_short')
 		composer_titles = row_element.findall('composer_title')
 		title_pipes = row_element.findall('title_pipes')
 		works_conductors_ids = row_element.findall('works_conductors_ids')
@@ -118,10 +127,10 @@ class Program:
 				works_ids[idx].text,
 				composer_numbers[idx].text,
 				replace_spaces(composer_title_shorts[idx].text),
-				composer_title_shorts[idx].text.split(' / ')[0],
-				composer_title_shorts[idx].text.split(' / ')[1],
+				replace_spaces(composer_title_shorts[idx].text.split(' / ')[0]),
+				title_shorts[idx].text,
 				replace_angle_brackets(title_pipes[idx].text).split(' | ')[0],
-				title_pipes[idx].text.split(' | ')[1] if ' | ' in title_pipes[idx].text else None,
+				title_pipes[idx].text.split(' | ')[1] if ' | ' in title_pipes[idx].text else '',
 				works_conductors_ids[idx].text,
 				works_encore[idx].text,
 				works_soloists_functions[idx].text,
@@ -129,6 +138,25 @@ class Program:
 				works_soloists_names[idx].text,
 				works_soloists_inst_names[idx].text
 			))
+
+	def reformat_date(self, date_str):
+		date_obj = datetime.datetime.strptime(date_str, '%m/%d/%Y')
+		formatted_date = date_obj.strftime('%Y-%m-%d')
+		return formatted_date
+
+	def get_date_range(self):
+		if not self.dates:
+			return ""
+
+		first_date = self.dates[0]
+		last_date = self.dates[-1]
+
+		reformatted_first_date = self.reformat_date(first_date)
+		reformatted_last_date = self.reformat_date(last_date)
+
+		date_range = f"{reformatted_first_date}/{reformatted_last_date}"
+		return date_range
+
 
 # Load XML data from a file
 file_path = f'{library}program_updates.xml'
@@ -267,7 +295,7 @@ def update_folders(token):
 			VENUE_NAME = row[8]
 			SUB_EVENT_NAMES = row[9]
 			COMPOSER_TITLE = row[11].replace('|','\n\n').replace('Intermission, / .','Intermission').replace('<','').replace('>','')
-			COMPOSER_TITLE_SHORT = row[12].replace('<','').replace('>','')
+			COMPOSER_TITLE_SHORT = remove_angle_brackets(row[12])
 			NOTES_XML = row[13].replace('<br>','\n')
 
 			# get the Digital Archives (Hadoop) ID from public Solr
@@ -481,14 +509,18 @@ def add_sources_to_program(token):
 def program_works(programs, token):
 
 	for program in programs:
-		for work in program.program_works:
+		
+		# iterate through the Program Works but skip intermissions
+		filtered_program_works = [work for work in program.program_works if work.works_id != '0']
+		for work in filtered_program_works:
 
 			# clear old values, give the program work a title, and situate it within a Program
 			parameters = (
 				f"Documents.Virtual-Folder.Program-Work:CreateOrUpdate"
 				f"?CoreField.Legacy-Identifier={work.program_works_id}"
-				f"&CoreField.Title:={work.composer_title_short}"
+				f"&CoreField.Title:={work.composer_name} / {work.title_short}"
 				f"&CoreField.Parent-folder:=[Documents.Virtual-folder.Program:CoreField.Legacy-identifier={program.id}]"
+				f"&NYP.Program-ID:={program.id}"
 				f"&NYP.Composer/Work--=&NYP.Conductor--=&NYP.Composer--=&NYP.Soloist--="
 			)
 			url = f"{baseurl}{datatable}{parameters}&token={token}"
@@ -530,7 +562,7 @@ def program_works(programs, token):
 				f"Documents.Virtual-folder.Work:CreateOrUpdate"
 				f"?CoreField.Legacy-Identifier=WORK_{work.works_id}"
 				f"&NYP.Works-ID:={work.works_id}"
-				f"&CoreField.Title:={work.composer_title_short}"
+				f"&CoreField.Title:={work.composer_name} / {work.title_short}"
 				f"{assign_parent}"
 				f"&NYP.Work-Title-Full:={work.title_full}"
 				f"&NYP.Work-Title-Short:={work.title_short}"
@@ -548,12 +580,26 @@ def program_works(programs, token):
 			api_call(url,f'Link Work {work.works_id} to Program Work',work.program_works_id)
 
 			# add metadata to each program work
+			if work.works_encore == 'Y':
+				encore = 'Yes'
+			else:
+				encore = ''
+
 			parameters = (
 				f"Documents.Virtual-Folder.Program-work:Update"
 				f"?CoreField.Legacy-Identifier={work.program_works_id}"
 				f"&NYP.Composer/Work++={work.composer_title_short}"
 				f"&NYP.Composer/Work-Full-Title:={work.composer_name} / {work.title_full}"
 				f"&NYP.Movement:={work.movement}"
+				f"&NYP.Encore:={encore}"
+				f"&NYP.Season+={program.season}"
+				f"&NYP.Orchestra:={program.orchestra_name}"
+				f"&NYP.Program-Date(s)++={'|'.join(program.dates)}"
+				f"&NYP.Program-Date-Range:={program.date_range}"
+				f"&NYP.Program-Times++={'|'.join(program.performance_times)}"
+				f"&NYP.Location++={'|'.join(program.location_names)}"
+				f"&NYP.Venue++={'|'.join(program.venue_names)}"
+				f"&NYP.Event-Type++={'|'.join(program.venue_names)}"
 			)
 			url = f"{baseurl}{datatable}{parameters}&token={token}"
 			api_call(url,'Add metadata to Program Work',work.program_works_id)
@@ -569,14 +615,28 @@ def program_works(programs, token):
 
 			# link the soloists (semi-colon separated values)
 			if work.works_soloists_ids is not None:
-			    for soloist in work.works_soloists_ids.split(';'):
-			        parameters = (
-			            f"Documents.Virtual-Folder.Program-work:Update"
-			            f"?CoreField.Legacy-Identifier={work.program_works_id}"
-			            f"&NYP.Soloist+=[Contacts.Source.Default:CoreField.Artist-ID={soloist.strip()}]"
-			        )
-			        url = f"{baseurl}{datatable}{parameters}&token={token}"
-			        api_call(url, f'Link Soloist {soloist} to Program Work', work.program_works_id)
+				for soloist in work.works_soloists_ids.split(';'):
+					parameters = (
+						f"Documents.Virtual-Folder.Program-work:Update"
+						f"?CoreField.Legacy-Identifier={work.program_works_id}"
+						f"&NYP.Soloist+=[Contacts.Source.Default:CoreField.Artist-ID={soloist.strip()}]"
+					)
+					url = f"{baseurl}{datatable}{parameters}&token={token}"
+					api_call(url, f'Link Soloist {soloist} to Program Work', work.program_works_id)
+
+			# add paired-value field for soloist/instrument: https://link.orangelogic.com/CMS4/LMS/Home/Published-Documentation/API/Update-a-Paired-Value-Field-Using-the-CreateOrUpdate-API/
+				for name, inst, role in zip(work.works_soloists_names.split(';'), work.works_soloists_inst_names.split(';'), work.works_soloists_functions.split(';')):
+
+					soloist_inst = f"{name.strip()} / {inst.strip()}"
+					soloist_role = f"{role.strip().replace('S','Soloist').replace('A','Assisting Artist')}"
+
+					parameters = (
+						f"Documents.Virtual-Folder.Program-work:Update"
+						f"?CoreField.Legacy-Identifier={work.program_works_id}"
+						f"&NYP.Soloist-/-Instrument-/-Role++={soloist_inst}{{'LinkedKeyword':'{soloist_role}'}}"
+					)
+					url = f"{baseurl}{datatable}{parameters}&token={token}"
+					api_call(url,'Add soloist and role to Program Work',work.program_works_id)
 
 			# link the conductors
 			if work.works_conductor_ids is not None:
