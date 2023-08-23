@@ -9,19 +9,32 @@ Make sure you have an .env file in this directory that looks like this:
  login=yourCortexLogin
  password=yourCortexPassword
  directory=/location/of/csvs/
- library=/location/of/printed/music/xml/
+ carlos_xml_path=/location/of/carlos/xml/
+ dbtext_xml_path=/location/of/dbtext/xml
  logs=/location/for/logs/
  baseurl=https://mydomain.org
  datatable=/API/DataTable/v2.2/
 """
 
-import requests, csv, sys, os, time, datetime, logging, json, re
-from urllib.parse import quote
+# Standard Library Imports
+import sys
+import os
+import time
+import datetime
+import logging
 from os.path import join, dirname
+
+# Third-Party Package Imports
+import requests
+import csv
+import json
+import re
+import codecs
+import tempfile
+from urllib.parse import quote
 from requests.exceptions import HTTPError
 from dotenv import load_dotenv
 import xml.etree.ElementTree as ET
-
 
 # First, grab credentials and other values from the .env file in the same folder as this script
 dotenv_path = join(dirname(__file__), '.env')
@@ -34,15 +47,20 @@ directory = os.environ.get('directory', 'default')
 logs = os.environ.get('logs', 'default')
 baseurl = os.environ.get('baseurl', 'default')
 datatable = os.environ.get('datatable', 'default')
-library = os.environ.get('library', 'default')
+carlos_xml_path = os.environ.get('carlos_xml_path', 'default')
+dbtext_xml_path = os.environ.get('dbtext_xml_path', 'default')
 
-# Some helper functions for cleanup
+# File paths for our source data
+program_xml = f'{carlos_xml_path}/program_updates.xml'
+business_records_xml = f'{dbtext_xml_path}/CTLG1024-1.xml'
+
+# Some helper functions for data cleanup
 def xpath_text(element, path):
 	value = element.xpath(path)
 	return value[0] if value else ''
 
 def remove_angle_brackets(text):
-	replaced_text = text.replace('&lt;','').replace('&gt;','')
+	replaced_text = text.replace('<','').replace('>','')
 	return replaced_text
 
 def replace_angle_brackets(text):
@@ -61,12 +79,29 @@ def replace_spaces(text):
 	replaced_text = text.replace('  ', ' ')
 	return replaced_text
 
-def reformat_date(date_str):
+def replace_chars(text):
+	cleaned_text = text.replace('&','%26amp;').replace('#','%23').replace('+','%2B')
+	return cleaned_text
+
+def reformat_date(date_str, input_format, output_format):
 	# Convert the input date string to a datetime object
-	date_obj = datetime.strptime(date_str, '%m/%d/%Y')
-	# Format the datetime object as YYYY-MM-DD
-	formatted_date = date_obj.strftime('%Y-%m-%d')
+	date_obj = datetime.datetime.strptime(date_str, input_format)
+	# Format the datetime object as specified in the output format
+	formatted_date = date_obj.strftime(output_format)
 	return formatted_date
+
+def get_date_range(dates, input_format, output_format):
+	if not dates:
+		return ""
+
+	first_date = dates[0]
+	last_date = dates[-1]
+
+	reformatted_first_date = reformat_date(first_date, input_format, output_format)
+	reformatted_last_date = reformat_date(last_date, input_format, output_format)
+
+	date_range = f"{reformatted_first_date}/{reformatted_last_date}"
+	return date_range
 
 # Set up our Program classes
 class ProgramWork:
@@ -92,10 +127,10 @@ class ProgramWork:
 class Program:
 	def __init__(self, row_element):
 		self.id = row_element.find('id').text
-		self.season = row_element.find('season').text
+		self.season = self.season_fix(row_element.find('season').text)
 		self.orchestra_name = row_element.find('orchestra_name').text
 		self.dates = [date.text for date in row_element.findall('date')]
-		self.date_range = self.get_date_range()
+		self.date_range = get_date_range(self.dates, '%m/%d/%Y', '%Y-%m-%d')
 		self.performance_times = [time.text for time in row_element.findall('performance_time')]
 		self.location_names = [loc_name.text for loc_name in row_element.findall('location_name')]
 		self.venue_names = [venue_name.text for venue_name in row_element.findall('venue_name')]
@@ -122,53 +157,105 @@ class Program:
 		works_soloists_inst_names = row_element.findall('works_soloists_inst_names')
 		
 		for idx, program_works_id in enumerate(program_works_ids):
-			self.program_works.append(ProgramWork(
-				program_works_id.text.replace('*','-'),
-				works_ids[idx].text,
-				composer_numbers[idx].text,
-				replace_spaces(composer_title_shorts[idx].text),
-				replace_spaces(composer_title_shorts[idx].text.split(' / ')[0]),
-				title_shorts[idx].text,
-				replace_angle_brackets(title_pipes[idx].text).split(' | ')[0],
-				title_pipes[idx].text.split(' | ')[1] if ' | ' in title_pipes[idx].text else '',
-				works_conductors_ids[idx].text,
-				works_encore[idx].text,
-				works_soloists_functions[idx].text,
-				works_soloists_ids[idx].text,
-				works_soloists_names[idx].text,
-				works_soloists_inst_names[idx].text
-			))
+			if program_works_id.text is not None:  # Check if program_works_id has text
+				self.program_works.append(ProgramWork(
+					program_works_id.text.replace('*', '-'),  # Replace '*' with '-'
+					works_ids[idx].text,
+					composer_numbers[idx].text,
+					replace_spaces(remove_angle_brackets(composer_title_shorts[idx].text)),
+					replace_spaces(composer_title_shorts[idx].text.split(' / ')[0]),
+					remove_angle_brackets(title_shorts[idx].text),
+					replace_angle_brackets(title_pipes[idx].text.split(' | ')[0]),
+					title_pipes[idx].text.split(' | ')[1] if ' | ' in title_pipes[idx].text else '',
+					works_conductors_ids[idx].text,
+					works_encore[idx].text,
+					works_soloists_functions[idx].text,
+					works_soloists_ids[idx].text,
+					works_soloists_names[idx].text,
+					works_soloists_inst_names[idx].text
+				))
 
-	def reformat_date(self, date_str):
-		date_obj = datetime.datetime.strptime(date_str, '%m/%d/%Y')
-		formatted_date = date_obj.strftime('%Y-%m-%d')
-		return formatted_date
+	def season_fix(self, season):
+		# fix for 1899-00 and 1999-00
+		if len(season) == 7 and season.endswith('00'):
+			year = season.split('-')[0]
+			next_year = str(int(year) + 1)
+			season = year + '-' + next_year.zfill(2)
+		return season
 
-	def get_date_range(self):
-		if not self.dates:
-			return ""
+def load_program_data(file_path):
+	try:
+		# Open the XML file and read its content
+		with open(file_path, 'r', encoding='utf-8', errors='replace') as file:
+			xml_data = file.read()
 
-		first_date = self.dates[0]
-		last_date = self.dates[-1]
+		# Create a temporary file to save corrected XML content
+		with tempfile.NamedTemporaryFile(mode='w', delete=False, encoding='utf-8') as temp_file:
+			temp_file.write(xml_data)
+			temp_file_path = temp_file.name
 
-		reformatted_first_date = self.reformat_date(first_date)
-		reformatted_last_date = self.reformat_date(last_date)
+		# Parse the XML using the corrected temporary file
+		root = ET.parse(temp_file_path).getroot()
+		programs = []
 
-		date_range = f"{reformatted_first_date}/{reformatted_last_date}"
-		return date_range
+		for row_element in root.findall('row'):
+			program = Program(row_element)
+			programs.append(program)
+
+		return programs
+
+	finally:
+		# Clean up: remove the temporary file
+		if temp_file_path:
+			os.remove(temp_file_path)
 
 
-# Load XML data from a file
-file_path = f'{library}program_updates.xml'
-with open(file_path, 'r') as file:
-	xml_data = file.read()
+# Set up our Business Records class
+class BusinessRecord:
+	def __init__(self, record_element, namespace):
+		self.folder_number = record_element.find('inm:BOX-NUMBER', namespaces=namespace).text
+		self.folder_name = record_element.find('inm:FOLDER-TITLE', namespaces=namespace).text
+		self.record_group = record_element.find('inm:RECORD-GROUP', namespaces=namespace).text
+		self.series = record_element.find('inm:SERIES', namespaces=namespace).text
+		self.subseries = record_element.find('inm:SUB-SERIES', namespaces=namespace).text
+		self.date_from = record_element.find('inm:FROM', namespaces=namespace).text
+		self.date_to = record_element.find('inm:TO', namespaces=namespace).text
+		self.date_range = get_date_range([self.date_from, self.date_to], '%d %b %Y', '%Y-%m-%d')
+		self.abstract = record_element.find('inm:ABSTRACT', namespaces=namespace).text
+		self.notes = record_element.find('inm:NOTES', namespaces=namespace).text
+		self.subjects = record_element.find('inm:SUBJECTS', namespaces=namespace).text
+		self.names = record_element.find('inm:NAMES', namespaces=namespace).text
+		self.contents = record_element.find('inm:CONTENTS', namespaces=namespace).text
+		self.content_type = record_element.find('inm:CONTENT-TYPE', namespaces=namespace).text
+		self.language = record_element.find('inm:LANGUAGE', namespaces=namespace).text
+		self.archives_location = record_element.find('inm:LOCATION', namespaces=namespace).text
+		self.accession_date = reformat_date(record_element.find('inm:ACCESSION-DATE', namespaces=namespace).text, '%d %b %Y', '%m/%d/%Y')
+		self.size = record_element.find('inm:SIZE', namespaces=namespace).text
+		self.condition = record_element.find('inm:CONDITION', namespaces=namespace).text
+		self.make_public = record_element.find('inm:MAKE-PUBLIC', namespaces=namespace).text
+		self.is_public = record_element.find('inm:Is-Item-Public', namespaces=namespace).text
+		self.digitization_notes = record_element.find('inm:Digitize-Notes', namespaces=namespace).text	
 
-root = ET.fromstring(xml_data)
-programs = []
+# Load Business Record data from the source XML
+def load_business_records_data(file_path):
+	# Load Business Records data from a file
+	with open(file_path, 'r') as file:
+		xml_data = file.read()
 
-for row_element in root.findall('row'):
-	program = Program(row_element)
-	programs.append(program)
+	root = ET.fromstring(xml_data)
+
+	# Define the namespace
+	namespace = {"inm": "http://www.inmagic.com/webpublisher/query"}
+
+	# Get all inm:Record elements
+	record_elements = root.findall(".//inm:Record", namespaces=namespace)
+
+	records = []
+	for record_element in record_elements:
+		record = BusinessRecord(record_element, namespace)
+		records.append(record)
+
+	return records
 
 # get a new token from the Login API
 def auth():
@@ -506,22 +593,46 @@ def add_sources_to_program(token):
 			api_call(call,f'Add composer {Composer_ID} to Program',Program_ID)
 	file.close()
 
+
 def program_works(programs, token):
 
+	# update_list = [program for program in programs if program.season == '1844-45']
+	# for program in update_list:
 	for program in programs:
 		
 		# iterate through the Program Works but skip intermissions
 		filtered_program_works = [work for work in program.program_works if work.works_id != '0']
 		for work in filtered_program_works:
 
+			for attr, value in vars(program).items():
+				print(f"{attr}: {value}")
+
+			for attr, value in vars(work).items():
+				print(f"{attr}: {value}")
+
 			# clear old values, give the program work a title, and situate it within a Program
+
+			# add movement to the title if there is one
+			if work.movement:
+				movement = f' / {work.movement}'
+			else:
+				movement = ''
+
+			# set the visibility based on whether the event is past or future
+			if datetime.datetime.strptime(program.dates[0], '%m/%d/%Y').date() < datetime.datetime.now().date():
+				visibility = "Public"
+			else:
+				visibility = "Pending"
+
 			parameters = (
 				f"Documents.Virtual-Folder.Program-Work:CreateOrUpdate"
 				f"?CoreField.Legacy-Identifier={work.program_works_id}"
-				f"&CoreField.Title:={work.composer_name} / {work.title_short}"
+				f"&CoreField.Title:={work.composer_name} / {replace_chars(work.title_short)}{movement}"
 				f"&CoreField.Parent-folder:=[Documents.Virtual-folder.Program:CoreField.Legacy-identifier={program.id}]"
 				f"&NYP.Program-ID:={program.id}"
 				f"&NYP.Composer/Work--=&NYP.Conductor--=&NYP.Composer--=&NYP.Soloist--="
+				f"&NYP.Season--=&NYP.Program-Date(s)--=&NYP.Program-Times--=&NYP.Location--=&NYP.Venue--=&NYP.Event-Type--="
+				f"&CoreField.visibility-class:={visibility}"
 			)
 			url = f"{baseurl}{datatable}{parameters}&token={token}"
 			api_call(url,'Establish Program Work',work.program_works_id)
@@ -540,10 +651,12 @@ def program_works(programs, token):
 				if r_data['APIResponse']['GlobalInfo']['TotalCount'] == 1:
 					# We got one result, which is good
 					exists = True
+					logger.info('Work exists in Cortex')
 				
 				else:
 					# We have no result, so this is probably a new work
 					exists = False
+					logger.info('This looks like a new work so let\'s add it to Cortex')
 			else:
 				exists = False
 				logger.warning(f'Unable to find Program ID {program_id}')
@@ -562,10 +675,10 @@ def program_works(programs, token):
 				f"Documents.Virtual-folder.Work:CreateOrUpdate"
 				f"?CoreField.Legacy-Identifier=WORK_{work.works_id}"
 				f"&NYP.Works-ID:={work.works_id}"
-				f"&CoreField.Title:={work.composer_name} / {work.title_short}"
+				f"&CoreField.Title:={work.composer_name} / {replace_chars(work.title_short)}"
 				f"{assign_parent}"
-				f"&NYP.Work-Title-Full:={work.title_full}"
-				f"&NYP.Work-Title-Short:={work.title_short}"
+				f"&NYP.Work-Title-Full:={replace_chars(work.title_full)}"
+				f"&NYP.Work-Title-Short:={replace_chars(work.title_short)}"
 			)
 			url = f"{baseurl}{datatable}{parameters}&token={token}"
 			api_call(url,'Update the Work',work.works_id)
@@ -588,18 +701,18 @@ def program_works(programs, token):
 			parameters = (
 				f"Documents.Virtual-Folder.Program-work:Update"
 				f"?CoreField.Legacy-Identifier={work.program_works_id}"
-				f"&NYP.Composer/Work++={work.composer_title_short}"
-				f"&NYP.Composer/Work-Full-Title:={work.composer_name} / {work.title_full}"
+				f"&NYP.Composer/Work++={replace_chars(work.composer_title_short)}"
+				f"&NYP.Composer/Work-Full-Title:={work.composer_name} / {replace_chars(work.title_full)}"
 				f"&NYP.Movement:={work.movement}"
 				f"&NYP.Encore:={encore}"
 				f"&NYP.Season+={program.season}"
 				f"&NYP.Orchestra:={program.orchestra_name}"
 				f"&NYP.Program-Date(s)++={'|'.join(program.dates)}"
 				f"&NYP.Program-Date-Range:={program.date_range}"
-				f"&NYP.Program-Times++={'|'.join(program.performance_times)}"
+				f"&NYP.Program-Times++={'|'.join(time for time in program.performance_times if time is not None)}"
 				f"&NYP.Location++={'|'.join(program.location_names)}"
 				f"&NYP.Venue++={'|'.join(program.venue_names)}"
-				f"&NYP.Event-Type++={'|'.join(program.venue_names)}"
+				f"&NYP.Event-Type++={'|'.join(program.sub_event_names)}"
 			)
 			url = f"{baseurl}{datatable}{parameters}&token={token}"
 			api_call(url,'Add metadata to Program Work',work.program_works_id)
@@ -654,7 +767,7 @@ def program_works(programs, token):
 def library_updates(token):
 
 	# parse the XML file
-	tree = etree.parse(f'{library}library_updates.xml')
+	tree = etree.parse(f'{carlos_xml_path}/library_updates.xml')
 	root = tree.getroot()
 
 	# parse each row in the XML and assign values to variables
@@ -974,6 +1087,93 @@ def library_updates(token):
 
 	logger.info('All done with Printed Music updates!')
 
+# update Business Records
+def update_business_records(token, filepath):
+
+	# Call the function to parse records from XML content
+	records = load_business_records_data(filepath)
+
+	# Now the 'records' list contains objects with the extracted data
+	for record in records:
+		print(f"Folder Number: {record.folder_number}")
+		print(f"Contents: {record.contents}")
+		print(f"Location: {record.archives_location}")
+		print(f"Accession Date: {record.accession_date}")
+		print(f"Record Group: {record.record_group}")
+		print(f"Folder Name: {record.folder_name}")
+		print(f"Series: {record.series}")
+		print(f"Subseries: {record.subseries}")
+		print(f"Date From: {record.date_from}")
+		print(f"Date To: {record.date_to}")
+		print(f"Date Range: {record.date_range}")
+		print(f"Abstract: {record.abstract}")
+		print(f"Notes: {record.notes}")
+		print(f"Subjects: {record.subjects}")
+		print(f"Names: {record.names}")
+		print(f"Contents: {record.contents}")
+		print(f"Content Type: {record.content_type}")
+		print(f"Language: {record.language}")
+		print(f"Archives Location: {record.archives_location}")
+		print(f"Accession Date: {record.accession_date}")
+		print(f"Size: {record.size}")
+		print(f"Condition: {record.condition}")
+		print(f"Make Public?: {record.make_public}")
+		print(f"Is Public?: {record.is_public}")
+		print(f"Digitization Notes: {record.digitization_notes}")
+		print("----")
+
+		# Start making API calls
+		# Establish the record in Cortex
+		parameters = (
+			f"Documents.Folder.Business-document:CreateOrUpdate"
+			f"?CoreField.Legacy-Identifier=BR_{record.folder_number}"
+			f"&CoreField.Title:=BR_{record.folder_number} / {record.folder_name}"
+			f"&NYP.Folder-Number:={record.folder_number}"
+			f"&NYP.People--=&NYP.Subjects--=&NYP.Language--="
+			f"&CoreField.Parent-folder:=[Documents.All:CoreField.Identifier=PH1N31H]"
+		)
+		url = f"{baseurl}{datatable}{parameters}&token={token}"
+		api_call(url,'Establish Business Record',record.folder_number)
+
+		# Should this be Public?
+		if record.make_public.startswith('Y') or record.is_public.startswith('Y'):
+			visibility = "Public"
+		else:
+			visibility = "Pending"
+
+		# Add more metadata, this time in JSON format so we don't bump into API character limits
+		data = {
+			"CoreField.Legacy-Identifier": f"BR_{record.folder_number}",
+			"CoreField.Description:": record.abstract,
+			"NYP.Archives-Folder-Title:": record.folder_name,
+			"NYP.Date-Range:": record.date_range,
+			"NYP.Subjects++": record.subjects,
+			"NYP.Language++": record.language,
+			"NYP.Archives-Location:": record.archives_location,
+			"NYP.Record-Group+:": record.record_group,
+			"NYP.Series:": record.series,
+			"NYP.Extent:": record.size,
+			"NYP.Condition:": record.condition,
+			"CoreField.notes:": record.notes,
+			"NYP.Digitization-Notes:": record.digitization_notes,
+			"CoreField.visibility-class:": visibility,
+			"NYP.Accession-Date:": record.accession_date,
+		}
+		# fix for linebreaks and such - dump to string and load back to JSON
+		data = json.dumps(data)
+		logger.info(data)
+		data = json.loads(data)
+
+		action = 'Documents.Folder.Business-document:Update'
+		params = {'token': token}
+		url = f"{baseurl}{datatable}{action}"
+		api_call(url, f'Add metadata to Business Record', record.folder_number, params, data)
+		
+		# Link People
+
+		# Link Subseries
+
+
 def api_call(url, asset_type, ID, params=None, data=None):
 	# Set the maximum number of attempts to make the call
 	max_attempts = 2
@@ -1067,12 +1267,15 @@ if token and token != '':
 	logger.info(f'We have a token: {token} Proceeding...')
 	print(f'Your token is: {token}')
 
+	# programs = load_program_data(program_xml) # right now we only need to load this data for the program_works function, but we'll eventually update the other functions to use Program objects, so we'll keep this function separate
+
 	# make_folders(token)
 	# update_folders(token)
 	# create_sources(token)
 	# add_sources_to_program(token)
 	# library_updates(token)
-	program_works(programs, token)
+	# program_works(programs, token)
+	update_business_records(token, business_records_xml)
 
 	logger.info('ALL DONE! Bye bye :)')
 
