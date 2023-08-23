@@ -1267,15 +1267,15 @@ if token and token != '':
 	logger.info(f'We have a token: {token} Proceeding...')
 	print(f'Your token is: {token}')
 
-	# programs = load_program_data(program_xml) # right now we only need to load this data for the program_works function, but we'll eventually update the other functions to use Program objects, so we'll keep this function separate
+	programs = load_program_data(program_xml) # right now we only need to load this data for the program_works function, but we'll eventually update the other functions to use Program objects, so we'll keep this function separate
 
-	# make_folders(token)
-	# update_folders(token)
-	# create_sources(token)
-	# add_sources_to_program(token)
-	# library_updates(token)
-	# program_works(programs, token)
-	update_business_records(token, business_records_xml)
+	make_folders(token)
+	update_folders(token)
+	create_sources(token)
+	add_sources_to_program(token)
+	library_updates(token)
+	program_works(programs, token)
+	# update_business_records(token, business_records_xml)
 
 	logger.info('ALL DONE! Bye bye :)')
 
