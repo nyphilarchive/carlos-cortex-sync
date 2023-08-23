@@ -16,22 +16,9 @@ Make sure you have an .env file in this directory that looks like this:
  datatable=/API/DataTable/v2.2/
 """
 
-# Standard Library Imports
-import sys
-import os
-import time
-import datetime
-import logging
-from os.path import join, dirname
-
-# Third-Party Package Imports
-import requests
-import csv
-import json
-import re
-import codecs
-import tempfile
+import requests, csv, sys, os, time, datetime, logging, json, re, codecs, tempfile
 from urllib.parse import quote
+from os.path import join, dirname
 from requests.exceptions import HTTPError
 from dotenv import load_dotenv
 import xml.etree.ElementTree as ET
@@ -387,6 +374,8 @@ def update_folders(token):
 
 			# get the Digital Archives (Hadoop) ID from public Solr
 			lookup = f"http://proslrapp01.nyphil.live:9993/solr/assets/select?q=npp%5C%3AProgramID%3A{ID}&fl=id&wt=json"
+			response = ""
+
 			try:
 				response = requests.get(lookup)
 				# If the response was successful, no Exception will be raised
@@ -394,7 +383,7 @@ def update_folders(token):
 			except HTTPError as http_err:
 				logger.error(f'Failed to get Solr data for program {ID} - HTTP error occurred: {http_err}')
 			except Exception as err:
-				logger.error(f'Failed to get Solr data for program {ID} - Other error occurred: {err}')			
+				logger.error(f'Failed to get Solr data for program {ID} - Other error occurred: {err}')
 
 			if response:
 				logger.info(f'Success retrieving Solr data for program {ID}')
@@ -767,7 +756,7 @@ def program_works(programs, token):
 def library_updates(token):
 
 	# parse the XML file
-	tree = etree.parse(f'{carlos_xml_path}/library_updates.xml')
+	tree = ET.parse(f'{carlos_xml_path}/library_updates.xml')
 	root = tree.getroot()
 
 	# parse each row in the XML and assign values to variables
