@@ -22,6 +22,7 @@ from os.path import join, dirname
 from requests.exceptions import HTTPError
 from dotenv import load_dotenv
 import xml.etree.ElementTree as ET
+from lxml import etree
 
 # First, grab credentials and other values from the .env file in the same folder as this script
 dotenv_path = join(dirname(__file__), '.env')
@@ -38,8 +39,9 @@ carlos_xml_path = os.environ.get('carlos_xml_path', 'default')
 dbtext_xml_path = os.environ.get('dbtext_xml_path', 'default')
 
 # File paths for our source data
-program_xml = f'{carlos_xml_path}/program_updates.xml'
-business_records_xml = f'{dbtext_xml_path}/CTLG1024-1.xml'
+program_xml = f"{carlos_xml_path}/program_updates.xml"
+business_records_xml = f"{dbtext_xml_path}/CTLG1024-1_full.xml"
+name_id_mapping_file = f"{dbtext_xml_path}/names-1.csv"
 
 # Some helper functions for data cleanup
 def xpath_text(element, path):
@@ -77,18 +79,35 @@ def reformat_date(date_str, input_format, output_format):
 	formatted_date = date_obj.strftime(output_format)
 	return formatted_date
 
+def process_date(date, output_format):
+	if not date:
+		return ''	
+	if len(date) >= 10:
+		return reformat_date(date, '%d %b %Y', output_format)
+	elif len(date) == 4:
+		return reformat_date(f"01/01/{date}", '%m/%d/%Y', output_format)
+	else:
+		return ''
+
 def get_date_range(dates, input_format, output_format):
 	if not dates:
 		return ""
 
 	first_date = dates[0]
 	last_date = dates[-1]
+	if not first_date or not last_date:
+		return ""
 
 	reformatted_first_date = reformat_date(first_date, input_format, output_format)
 	reformatted_last_date = reformat_date(last_date, input_format, output_format)
 
+	# Ensure the order is correct
+	if reformatted_first_date > reformatted_last_date:
+		reformatted_first_date, reformatted_last_date = reformatted_last_date, reformatted_first_date
+
 	date_range = f"{reformatted_first_date}/{reformatted_last_date}"
 	return date_range
+
 
 # Set up our Program classes
 class ProgramWork:
@@ -199,14 +218,15 @@ def load_program_data(file_path):
 
 # Set up our Business Records class
 class BusinessRecord:
-	def __init__(self, record_element, namespace):
+	def __init__(self, record_element, namespace, name_id_mapping):
 		self.folder_number = record_element.find('inm:BOX-NUMBER', namespaces=namespace).text
 		self.folder_name = record_element.find('inm:FOLDER-TITLE', namespaces=namespace).text
 		self.record_group = record_element.find('inm:RECORD-GROUP', namespaces=namespace).text
 		self.series = record_element.find('inm:SERIES', namespaces=namespace).text
 		self.subseries = record_element.find('inm:SUB-SERIES', namespaces=namespace).text
-		self.date_from = record_element.find('inm:FROM', namespaces=namespace).text
-		self.date_to = record_element.find('inm:TO', namespaces=namespace).text
+		self.date_from = process_date(record_element.find('inm:FROM', namespaces=namespace).text, '%d %b %Y')
+		print(f"{record_element.find('inm:TO', namespaces=namespace).text} - {self.folder_number}")
+		self.date_to = process_date(record_element.find('inm:TO', namespaces=namespace).text, '%d %b %Y')
 		self.date_range = get_date_range([self.date_from, self.date_to], '%d %b %Y', '%Y-%m-%d')
 		self.abstract = record_element.find('inm:ABSTRACT', namespaces=namespace).text
 		self.notes = record_element.find('inm:NOTES', namespaces=namespace).text
@@ -216,15 +236,29 @@ class BusinessRecord:
 		self.content_type = record_element.find('inm:CONTENT-TYPE', namespaces=namespace).text
 		self.language = record_element.find('inm:LANGUAGE', namespaces=namespace).text
 		self.archives_location = record_element.find('inm:LOCATION', namespaces=namespace).text
-		self.accession_date = reformat_date(record_element.find('inm:ACCESSION-DATE', namespaces=namespace).text, '%d %b %Y', '%m/%d/%Y')
+		self.accession_date = record_element.find('inm:ACCESSION-DATE', namespaces=namespace).text
 		self.size = record_element.find('inm:SIZE', namespaces=namespace).text
 		self.condition = record_element.find('inm:CONDITION', namespaces=namespace).text
 		self.make_public = record_element.find('inm:MAKE-PUBLIC', namespaces=namespace).text
 		self.is_public = record_element.find('inm:Is-Item-Public', namespaces=namespace).text
-		self.digitization_notes = record_element.find('inm:Digitize-Notes', namespaces=namespace).text	
+		self.digitization_notes = record_element.find('inm:Digitize-Notes', namespaces=namespace).text
+
+		# Store the name ID mapping passed during object creation
+		self.name_id_mapping = name_id_mapping
+
+	def get_id_for_name(self, name):
+		return self.name_id_mapping.get(name, None)  # Return None if name is not found
+
 
 # Load Business Record data from the source XML
-def load_business_records_data(file_path):
+def load_business_records_data(file_path, name_id_mapping_file):
+	# Load the name ID mapping from the CSV file
+	name_id_mapping = {}
+	with open(name_id_mapping_file, 'r') as csvfile:
+		csvreader = csv.reader(csvfile, delimiter='|')
+		for row in csvreader:
+			name_id_mapping[row[1]] = row[0]
+
 	# Load Business Records data from a file
 	with open(file_path, 'r') as file:
 		xml_data = file.read()
@@ -239,7 +273,7 @@ def load_business_records_data(file_path):
 
 	records = []
 	for record_element in record_elements:
-		record = BusinessRecord(record_element, namespace)
+		record = BusinessRecord(record_element, namespace, name_id_mapping)
 		records.append(record)
 
 	return records
@@ -583,6 +617,7 @@ def add_sources_to_program(token):
 	file.close()
 
 
+# Go through each Program object and create/update the Works within each program virtual folder
 def program_works(programs, token):
 
 	# update_list = [program for program in programs if program.season == '1844-45']
@@ -756,7 +791,7 @@ def program_works(programs, token):
 def library_updates(token):
 
 	# parse the XML file
-	tree = ET.parse(f'{carlos_xml_path}/library_updates.xml')
+	tree = etree.parse(f'{carlos_xml_path}/library_updates.xml')
 	root = tree.getroot()
 
 	# parse each row in the XML and assign values to variables
@@ -766,6 +801,7 @@ def library_updates(token):
 		# temporary addition to fix just a few Library records in Cortex
 		# once updated, remove this row and un-tab rest of this function
 		composer_id = xpath_text(row, "composer_id/text()")
+		works_id = xpath_text(row, "works_id/text()")
 		notes_xml = xpath_text(row, "notes_xml/text()").replace('<br>','\n')
 		notes_xml = replace_angle_brackets(notes_xml)
 		publisher_name = xpath_text(row, "publisher_name/text()")
@@ -844,6 +880,15 @@ def library_updates(token):
 		params = {'token': token}
 		url = f"{baseurl}{datatable}{action}"
 		api_call(url,'Create/Update Printed Music folder',legacy_id,params,data)
+
+		# link work to record
+		parameters = (
+			f"Documents.Folder.Printed-Music:Update"
+			f"?CoreField.Legacy-Identifier={legacy_id}"
+			f"&NYP.Composer-/-Work+=[Documents.Virtual-folder.Work:CoreField.Legacy-identifier=WORK_{works_id}]"
+		)
+		url = f"{baseurl}{datatable}{parameters}&token={token}"
+		api_call(url, f'Link work {works_id} to the Printed Music folder',legacy_id)
 
 		# link composer to record
 		parameters = (
@@ -932,6 +977,15 @@ def library_updates(token):
 			url = f"{baseurl}{datatable}{action}"
 			api_call(url, f'Create/Update Score MS_{legacy_id} in Printed Music folder', legacy_id, params, data)
 
+			# link work to the score
+			parameters = (
+				f"Documents.Folder.Score:Update"
+				f"?CoreField.Legacy-Identifier=MS_{legacy_id}"
+				f"&NYP.Composer-/-Work+=[Documents.Virtual-folder.Work:CoreField.Legacy-identifier=WORK_{works_id}]"
+			)
+			url = f"{baseurl}{datatable}{parameters}&token={token}"
+			api_call(url, f'Link work {works_id} to Score MS_{legacy_id} in Printed Music folder',legacy_id)
+
 			# link the composer to the score
 			parameters = (
 				f"Documents.Folder.Score:Update"
@@ -991,6 +1045,15 @@ def library_updates(token):
 					params = {'token': token}
 					url = f"{baseurl}{datatable}{action}"
 					api_call(url, f'Create/Update Part MP_{part_id} in Printed Music folder', legacy_id, params, data)
+
+					# link work to the parts
+					parameters = (
+						f"Documents.Folder.Part:Update"
+						f"?CoreField.Legacy-Identifier=MP_{part_id}"
+						f"&NYP.Composer-/-Work+=[Documents.Virtual-folder.Work:CoreField.Legacy-identifier=WORK_{works_id}]"
+					)
+					url = f"{baseurl}{datatable}{parameters}&token={token}"
+					api_call(url, f'Link work {works_id} to Part MP_{part_id} in Printed Music folder',legacy_id)
 
 					# link the composer to the parts
 					parameters = (
@@ -1076,11 +1139,12 @@ def library_updates(token):
 
 	logger.info('All done with Printed Music updates!')
 
+
 # update Business Records
-def update_business_records(token, filepath):
+def update_business_records(token, filepath, name_id_mapping_file):
 
 	# Call the function to parse records from XML content
-	records = load_business_records_data(filepath)
+	records = load_business_records_data(filepath, name_id_mapping_file)
 
 	# Now the 'records' list contains objects with the extracted data
 	for record in records:
@@ -1125,10 +1189,16 @@ def update_business_records(token, filepath):
 		api_call(url,'Establish Business Record',record.folder_number)
 
 		# Should this be Public?
-		if record.make_public.startswith('Y') or record.is_public.startswith('Y'):
+		if (record.make_public and record.make_public.startswith('Y')) or (record.is_public and record.is_public.startswith('Y')):
 			visibility = "Public"
 		else:
-			visibility = "Pending"
+			visibility = "Hidden"
+
+		# Reformat the accession date, which may or may not be in a standard format
+		if record.accession_date:
+			accession_date = process_date(record.accession_date.strip(), '%m/%d/%Y')
+		else:
+			accession_date = ''
 
 		# Add more metadata, this time in JSON format so we don't bump into API character limits
 		data = {
@@ -1146,7 +1216,7 @@ def update_business_records(token, filepath):
 			"CoreField.notes:": record.notes,
 			"NYP.Digitization-Notes:": record.digitization_notes,
 			"CoreField.visibility-class:": visibility,
-			"NYP.Accession-Date:": record.accession_date,
+			"NYP.Accession-Date:": accession_date,
 		}
 		# fix for linebreaks and such - dump to string and load back to JSON
 		data = json.dumps(data)
@@ -1157,10 +1227,53 @@ def update_business_records(token, filepath):
 		params = {'token': token}
 		url = f"{baseurl}{datatable}{action}"
 		api_call(url, f'Add metadata to Business Record', record.folder_number, params, data)
-		
-		# Link People
 
-		# Link Subseries
+		# Link People -- split the names list and get each name's DBText ID
+		if record.names:
+			for name in record.names.split('|'):
+				name_id = record.get_id_for_name(name)
+
+				# Check if this DBText ID exists in Cortex
+				parameters = f'Contacts.Source.Default:Read?CoreField.DBText-ID={name_id}&format=json'
+				query = f"{baseurl}{datatable}{parameters}&token={token}"
+				response = api_call(query,'Checking if exists in Cortex: DBText ID',name_id)
+
+				if response:
+					response_data = response.json()
+					if response_data is not None and response_data['ResponseSummary']['TotalItemCount'] == 1:
+						logger.info(f"We got a result in Cortex for that DBText ID. Moving on...")
+					elif response_data is not None and response_data['ResponseSummary']['TotalItemCount'] == 0:
+						logger.info(f"DBText Name ID {name_id} for {name} not found in Cortex")
+						# Let's create a Source record
+						parameters = (
+							f"Contacts.Source.Default:Create"
+							f"?CoreField.DBText-ID={name_id}"
+							f"&CoreField.Last-name:={name}"
+						)
+						url = f"{baseurl}{datatable}{parameters}&token={token}"
+						api_call(url,f'Create Source record for',name)
+					else:
+						logger.error(f"We got more than one result for that DBText ID... Something is wrong.")
+						
+				# Finally, link the person to the Business Record
+				parameters = (
+					f"Documents.Folder.Business-document:Update"
+					f"?CoreField.Legacy-Identifier=BR_{record.folder_number}"
+					f"&NYP.People++=[Contacts.Source.Default:CoreField.DBText-ID={name_id}]"
+				)
+				url = f"{baseurl}{datatable}{parameters}&token={token}"
+				api_call(url,f'Link {name} in the People field for',record.folder_number)
+
+		# Link Subseries to record -- first Look up the person's DBText ID
+		if record.subseries:
+			name_id = record.get_id_for_name(record.subseries)
+			parameters = (
+				f"Documents.Folder.Business-document:Update"
+				f"?CoreField.Legacy-Identifier=BR_{record.folder_number}"
+				f"&NYP.Subseries:=[Contacts.Source.Default:CoreField.DBText-ID={name_id}]"
+			)
+			url = f"{baseurl}{datatable}{parameters}&token={token}"
+			api_call(url,f'Link {record.subseries} in the Subseries field for',record.folder_number)
 
 
 def api_call(url, asset_type, ID, params=None, data=None):
@@ -1264,7 +1377,7 @@ if token and token != '':
 	add_sources_to_program(token)
 	library_updates(token)
 	program_works(programs, token)
-	# update_business_records(token, business_records_xml)
+	# update_business_records(token, business_records_xml, name_id_mapping_file)
 
 	logger.info('ALL DONE! Bye bye :)')
 
