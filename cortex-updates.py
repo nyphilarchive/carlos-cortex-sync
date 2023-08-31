@@ -43,6 +43,11 @@ program_xml = f"{carlos_xml_path}/program_updates.xml"
 business_records_xml = f"{dbtext_xml_path}/CTLG1024-1_full.xml"
 name_id_mapping_file = f"{dbtext_xml_path}/names-1.csv"
 
+# Constants
+WORK_PARENT_FOLDER_IDENTIFIER = "PH1QHU6"
+PM_PARENT_FOLDER_IDENTIFIER = "PH1N31F"
+BR_PARENT_FOLDER_IDENTIFIER = "PH1N31H"
+
 # Some helper functions for data cleanup
 def xpath_text(element, path):
 	value = element.xpath(path)
@@ -225,7 +230,6 @@ class BusinessRecord:
 		self.series = record_element.find('inm:SERIES', namespaces=namespace).text
 		self.subseries = record_element.find('inm:SUB-SERIES', namespaces=namespace).text
 		self.date_from = process_date(record_element.find('inm:FROM', namespaces=namespace).text, '%d %b %Y')
-		print(f"{record_element.find('inm:TO', namespaces=namespace).text} - {self.folder_number}")
 		self.date_to = process_date(record_element.find('inm:TO', namespaces=namespace).text, '%d %b %Y')
 		self.date_range = get_date_range([self.date_from, self.date_to], '%d %b %Y', '%Y-%m-%d')
 		self.abstract = record_element.find('inm:ABSTRACT', namespaces=namespace).text
@@ -692,7 +696,7 @@ def program_works(programs, token):
 			if exists == True:
 				assign_parent = ''
 			else:
-				assign_parent = f'&CoreField.Parent-folder:=[Documents.All:CoreField.Identifier=PH1QHU6]'
+				assign_parent = f'&CoreField.Parent-folder:=[Documents.All:CoreField.Identifier={WORK_PARENT_FOLDER_IDENTIFIER}]'
 
 			# create/update the work in Cortex
 			parameters = (
@@ -786,6 +790,8 @@ def program_works(programs, token):
 					url = f"{baseurl}{datatable}{parameters}&token={token}"
 					api_call(url,f'Link Conductor {conductor} to Program Work',work.program_works_id)
 
+	logger.info("All done with Program Works")
+
 
 # Let's update Scores and Parts
 def library_updates(token):
@@ -865,7 +871,7 @@ def library_updates(token):
 		# Send this data as a JSON payload because it might exceed the character limit for a regular API call
 		data = {
 			'CoreField.Legacy-Identifier': legacy_id,
-			'CoreField.parent-folder:': '[Documents.All:CoreField.Identifier=PH1N31F]',
+			'CoreField.parent-folder:': f'[Documents.All:CoreField.Identifier={PM_PARENT_FOLDER_IDENTIFIER}]',
 			'CoreField.Title:': title,
 			'NYP.Publisher+:': publisher_name,
 			'CoreField.Notes:': notes_xml,
@@ -1143,10 +1149,53 @@ def library_updates(token):
 # update Business Records
 def update_business_records(token, filepath, name_id_mapping_file):
 
-	# Call the function to parse records from XML content
+	# Initialize a set to store checked DBText IDs
+	dbtext_id_checked = set()
+
+	def check_and_create_source(record, name, attr, link_parameter):
+		name_id = record.get_id_for_name(name)
+
+		# Skip the function if name_id is None
+		if name_id is None:
+			logger.error(f"Could not find {name} in the DBText Name Thesaurus. Skipping this name.")
+			return
+
+		if name_id in dbtext_id_checked:
+			logger.info(f"We already checked {name_id} in Cortex. Moving on...")
+			return
+		
+		# Check if this DBText ID exists in Cortex
+		parameters = f'Contacts.Source.Default:Read?CoreField.DBText-ID={name_id}&format=json'
+		query = f"{baseurl}{datatable}{parameters}&token={token}"
+		response = api_call(query, 'Checking if exists in Cortex: DBText ID', name_id)
+		
+		if response:
+			response_data = response.json()
+			dbtext_id_checked.add(name_id)
+
+			if response_data and response_data['ResponseSummary']['TotalItemCount'] == 1:
+				logger.info(f"We got a result in Cortex for that DBText ID. Moving on...")
+			elif response_data and response_data['ResponseSummary']['TotalItemCount'] == 0:
+				logger.warn(f"DBText Name ID {name_id} for {name} not found in Cortex")
+				
+				# Create a Source record
+				parameters = f"Contacts.Source.Default:Create?CoreField.DBText-ID:={name_id}&CoreField.Last-name:={name}"
+				url = f"{baseurl}{datatable}{parameters}&token={token}"
+				api_call(url, f'Create Source record for', name)
+			else:
+				logger.error(f"We got more than one result for that DBText ID... Something is wrong.")
+		
+		# Link the source to the Business Record
+		parameters = f"Documents.Folder.Business-document:Update?CoreField.Legacy-Identifier=BR_{record.folder_number}&{link_parameter}=[Contacts.Source.Default:CoreField.DBText-ID={name_id}]"
+		url = f"{baseurl}{datatable}{parameters}&token={token}"
+		api_call(url, f'Link {name} in the {attr} field for', record.folder_number)
+
+	# Log the start of the process
+	logger.info("Starting to update Business Records")
+
+	# Load business records from XML
 	records = load_business_records_data(filepath, name_id_mapping_file)
 
-	# Now the 'records' list contains objects with the extracted data
 	for record in records:
 		print(f"Folder Number: {record.folder_number}")
 		print(f"Contents: {record.contents}")
@@ -1183,7 +1232,7 @@ def update_business_records(token, filepath, name_id_mapping_file):
 			f"&CoreField.Title:=BR_{record.folder_number} / {record.folder_name}"
 			f"&NYP.Folder-Number:={record.folder_number}"
 			f"&NYP.People--=&NYP.Subjects--=&NYP.Language--="
-			f"&CoreField.Parent-folder:=[Documents.All:CoreField.Identifier=PH1N31H]"
+			f"&CoreField.Parent-folder:=[Documents.All:CoreField.Identifier={BR_PARENT_FOLDER_IDENTIFIER}]"
 		)
 		url = f"{baseurl}{datatable}{parameters}&token={token}"
 		api_call(url,'Establish Business Record',record.folder_number)
@@ -1203,14 +1252,14 @@ def update_business_records(token, filepath, name_id_mapping_file):
 		# Add more metadata, this time in JSON format so we don't bump into API character limits
 		data = {
 			"CoreField.Legacy-Identifier": f"BR_{record.folder_number}",
-			"CoreField.Description:": record.abstract,
+			"CoreField.Description:": record.abstract.strip() if record.abstract else '',
 			"NYP.Archives-Folder-Title:": record.folder_name,
 			"NYP.Date-Range:": record.date_range,
 			"NYP.Subjects++": record.subjects,
 			"NYP.Language++": record.language,
 			"NYP.Archives-Location:": record.archives_location,
 			"NYP.Record-Group+:": record.record_group,
-			"NYP.Series:": record.series,
+			"NYP.Series+:": record.series,
 			"NYP.Extent:": record.size,
 			"NYP.Condition:": record.condition,
 			"CoreField.notes:": record.notes,
@@ -1228,55 +1277,22 @@ def update_business_records(token, filepath, name_id_mapping_file):
 		url = f"{baseurl}{datatable}{action}"
 		api_call(url, f'Add metadata to Business Record', record.folder_number, params, data)
 
-		# Link People -- split the names list and get each name's DBText ID
+		# Link Names to Record
 		if record.names:
 			for name in record.names.split('|'):
-				name_id = record.get_id_for_name(name)
+				check_and_create_source(record, name, "People", "NYP.People++")
 
-				# Check if this DBText ID exists in Cortex
-				parameters = f'Contacts.Source.Default:Read?CoreField.DBText-ID={name_id}&format=json'
-				query = f"{baseurl}{datatable}{parameters}&token={token}"
-				response = api_call(query,'Checking if exists in Cortex: DBText ID',name_id)
-
-				if response:
-					response_data = response.json()
-					if response_data is not None and response_data['ResponseSummary']['TotalItemCount'] == 1:
-						logger.info(f"We got a result in Cortex for that DBText ID. Moving on...")
-					elif response_data is not None and response_data['ResponseSummary']['TotalItemCount'] == 0:
-						logger.info(f"DBText Name ID {name_id} for {name} not found in Cortex")
-						# Let's create a Source record
-						parameters = (
-							f"Contacts.Source.Default:Create"
-							f"?CoreField.DBText-ID={name_id}"
-							f"&CoreField.Last-name:={name}"
-						)
-						url = f"{baseurl}{datatable}{parameters}&token={token}"
-						api_call(url,f'Create Source record for',name)
-					else:
-						logger.error(f"We got more than one result for that DBText ID... Something is wrong.")
-						
-				# Finally, link the person to the Business Record
-				parameters = (
-					f"Documents.Folder.Business-document:Update"
-					f"?CoreField.Legacy-Identifier=BR_{record.folder_number}"
-					f"&NYP.People++=[Contacts.Source.Default:CoreField.DBText-ID={name_id}]"
-				)
-				url = f"{baseurl}{datatable}{parameters}&token={token}"
-				api_call(url,f'Link {name} in the People field for',record.folder_number)
-
-		# Link Subseries to record -- first Look up the person's DBText ID
+		# Link Subseries to Record
 		if record.subseries:
-			name_id = record.get_id_for_name(record.subseries)
-			parameters = (
-				f"Documents.Folder.Business-document:Update"
-				f"?CoreField.Legacy-Identifier=BR_{record.folder_number}"
-				f"&NYP.Subseries:=[Contacts.Source.Default:CoreField.DBText-ID={name_id}]"
-			)
-			url = f"{baseurl}{datatable}{parameters}&token={token}"
-			api_call(url,f'Link {record.subseries} in the Subseries field for',record.folder_number)
+			check_and_create_source(record, record.subseries, "Subseries", "NYP.Sub-Series:")
+
+	logger.info("Finished updating Business Records")
 
 
 def api_call(url, asset_type, ID, params=None, data=None):
+	# Initialize response to None
+	response = None
+
 	# Set the maximum number of attempts to make the call
 	max_attempts = 2
 
@@ -1289,9 +1305,6 @@ def api_call(url, asset_type, ID, params=None, data=None):
 	# Continue making the call until it is successful, or until the maximum number of attempts has been reached
 	while not success and attempts < max_attempts:
 		try:
-			# Import the requests module
-			import requests
-
 			# Make the API call with the provided params and data
 			response = requests.post(url, params=params, data=data)
 
@@ -1300,9 +1313,6 @@ def api_call(url, asset_type, ID, params=None, data=None):
 
 			# If no exceptions were raised, the call was successful
 			success = True
-		except ImportError as import_err:
-			# Handle errors that occur when importing the requests module
-			logger.error(f'Failed to import the requests module: {import_err}')
 		except HTTPError as http_err:
 			# Handle HTTP errors
 			logger.error(f'Failed: {asset_type} {ID} - HTTP error occurred: {http_err}')
@@ -1310,17 +1320,19 @@ def api_call(url, asset_type, ID, params=None, data=None):
 			# Increment the number of attempts
 			attempts += 1
 
+			# Delay before the next attempt (if applicable)
+			time.sleep(2)  # Sleep for 2 seconds
+
 			# If the maximum number of attempts has been reached, raise an exception to stop the loop
 			if attempts >= max_attempts:
-				# raise
 				logger.error('Moving on...')
-				pass
 		except Exception as err:
 			# Handle all other errors
 			logger.error(f'Failed: {asset_type} {ID} - Other error occurred: {err}')
 
 	# If the loop exited successfully, the call was successful
-	logger.info(f'Success: {asset_type} {ID}')
+	if success:
+		logger.info(f'Success: {asset_type} {ID}')
 	return response
 
 
@@ -1369,15 +1381,15 @@ if token and token != '':
 	logger.info(f'We have a token: {token} Proceeding...')
 	print(f'Your token is: {token}')
 
-	programs = load_program_data(program_xml) # right now we only need to load this data for the program_works function, but we'll eventually update the other functions to use Program objects, so we'll keep this function separate
+	# programs = load_program_data(program_xml) # right now we only need to load this data for the program_works function, but we'll eventually update the other functions to use Program objects, so we'll keep this function separate
 
-	make_folders(token)
-	update_folders(token)
-	create_sources(token)
-	add_sources_to_program(token)
-	library_updates(token)
-	program_works(programs, token)
-	# update_business_records(token, business_records_xml, name_id_mapping_file)
+	# make_folders(token)
+	# update_folders(token)
+	# create_sources(token)
+	# add_sources_to_program(token)
+	# library_updates(token)
+	# program_works(programs, token)
+	update_business_records(token, business_records_xml, name_id_mapping_file)
 
 	logger.info('ALL DONE! Bye bye :)')
 
