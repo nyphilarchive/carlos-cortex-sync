@@ -40,7 +40,7 @@ dbtext_xml_path = os.environ.get('dbtext_xml_path', 'default')
 
 # File paths for our source data
 program_xml = f"{carlos_xml_path}/program_updates.xml"
-business_records_xml = f"{dbtext_xml_path}/CTLG1024-1_full.xml"
+business_records_xml = f"{dbtext_xml_path}/CTLG1024-1.xml"
 name_id_mapping_file = f"{dbtext_xml_path}/names-1.csv"
 
 # Constants
@@ -624,6 +624,11 @@ def add_sources_to_program(token):
 # Go through each Program object and create/update the Works within each program virtual folder
 def program_works(programs, token):
 
+	logger.info("Starting Program Works updates...")
+
+	# Initialize the dictionary to store existing works and their status
+	work_status = {}
+
 	# update_list = [program for program in programs if program.season == '1844-45']
 	# for program in update_list:
 	for program in programs:
@@ -666,37 +671,35 @@ def program_works(programs, token):
 			api_call(url,'Establish Program Work',work.program_works_id)
 
 			# if the work already exists in Cortex, we won't update the parent folder
-			parameters = f'CoreField.Legacy-Identifier:WORK_{work.works_id} DocSubType:Work&format=json'
-			query = f'{baseurl}/API/search/v3.0/search?query={parameters}&token={token}'
-			try:
-				r = requests.get(query)
-			except:
-				logger.warning(f'Unable to find Program ID {program_id}')
-				pass
-
-			if r:
-				r_data = r.json()
-				if r_data['APIResponse']['GlobalInfo']['TotalCount'] == 1:
-					# We got one result, which is good
-					exists = True
-					logger.info('Work exists in Cortex')
-				
-				else:
-					# We have no result, so this is probably a new work
-					exists = False
-					logger.info('This looks like a new work so let\'s add it to Cortex')
+			# Check if the work has already been checked
+			if work.works_id in work_status:
+			    exists = work_status[work.works_id]
+			    logger.info(f'Work {work.works_id} status found in local cache: {"exists" if exists else "does not exist"}')
 			else:
-				exists = False
-				logger.warning(f'Unable to find Program ID {program_id}')
+			    parameters = f'CoreField.Legacy-Identifier:WORK_{work.works_id} DocSubType:Work&format=json'
+			    query = f'{baseurl}/API/search/v3.0/search?query={parameters}&token={token}'
+			    try:
+			        r = requests.get(query)
+			        r_data = r.json()
 
-			"""
-			Now we can compare the parent_id from Cortex to the CSV
-			If the values match, do not update this field
-			"""
-			if exists == True:
-				assign_parent = ''
-			else:
-				assign_parent = f'&CoreField.Parent-folder:=[Documents.All:CoreField.Identifier={WORK_PARENT_FOLDER_IDENTIFIER}]'
+			        if r_data['APIResponse']['GlobalInfo']['TotalCount'] == 1:
+			            exists = True
+			            logger.info('Work exists in Cortex')
+			        else:
+			            exists = False
+			            logger.info('This looks like a new work so let\'s add it to Cortex')
+			            
+			        # Store this work's existence status in the dictionary
+			        work_status[work.works_id] = exists
+
+			    except Exception as e:
+			        exists = False
+			        logger.warning(f'Unable to find Program ID {program_id}. Exception: {e}')
+
+			# Check if we should assign a parent
+			assign_parent = ''
+			if not exists:
+			    assign_parent = f'&CoreField.Parent-folder:=[Documents.All:CoreField.Identifier={WORK_PARENT_FOLDER_IDENTIFIER}]'
 
 			# create/update the work in Cortex
 			parameters = (
@@ -766,7 +769,7 @@ def program_works(programs, token):
 					api_call(url, f'Link Soloist {soloist} to Program Work', work.program_works_id)
 
 			# add paired-value field for soloist/instrument: https://link.orangelogic.com/CMS4/LMS/Home/Published-Documentation/API/Update-a-Paired-Value-Field-Using-the-CreateOrUpdate-API/
-				for name, inst, role in zip(work.works_soloists_names.split(';'), work.works_soloists_inst_names.split(';'), work.works_soloists_functions.split(';')):
+				for name, inst, role in zip(work.works_soloists_names.split(';') if work.works_soloists_names else '', work.works_soloists_inst_names.split(';') if work.works_soloists_inst_names else '', work.works_soloists_functions.split(';') if work.works_soloists_functions else ''):
 
 					soloist_inst = f"{name.strip()} / {inst.strip()}"
 					soloist_role = f"{role.strip().replace('S','Soloist').replace('A','Assisting Artist')}"
@@ -795,6 +798,8 @@ def program_works(programs, token):
 
 # Let's update Scores and Parts
 def library_updates(token):
+
+	logger.info("Starting Printed Music updates...")
 
 	# parse the XML file
 	tree = etree.parse(f'{carlos_xml_path}/library_updates.xml')
@@ -1160,32 +1165,36 @@ def update_business_records(token, filepath, name_id_mapping_file):
 			logger.error(f"Could not find {name} in the DBText Name Thesaurus. Skipping this name.")
 			return
 
+		# Initialize a flag to control whether we should check in Cortex
+		should_check_cortex = True
+
 		if name_id in dbtext_id_checked:
 			logger.info(f"We already checked {name_id} in Cortex. Moving on...")
-			return
-		
-		# Check if this DBText ID exists in Cortex
-		parameters = f'Contacts.Source.Default:Read?CoreField.DBText-ID={name_id}&format=json'
-		query = f"{baseurl}{datatable}{parameters}&token={token}"
-		response = api_call(query, 'Checking if exists in Cortex: DBText ID', name_id)
-		
-		if response:
-			response_data = response.json()
-			dbtext_id_checked.add(name_id)
+			should_check_cortex = False
+			
+		if should_check_cortex:
+			# Check if this DBText ID exists in Cortex
+			parameters = f'Contacts.Source.Default:Read?CoreField.DBText-ID={name_id}&format=json'
+			query = f"{baseurl}{datatable}{parameters}&token={token}"
+			response = api_call(query, 'Checking if exists in Cortex: DBText ID', name_id)
+			
+			if response:
+				response_data = response.json()
+				dbtext_id_checked.add(name_id)
 
-			if response_data and response_data['ResponseSummary']['TotalItemCount'] == 1:
-				logger.info(f"We got a result in Cortex for that DBText ID. Moving on...")
-			elif response_data and response_data['ResponseSummary']['TotalItemCount'] == 0:
-				logger.warn(f"DBText Name ID {name_id} for {name} not found in Cortex")
-				
-				# Create a Source record
-				parameters = f"Contacts.Source.Default:Create?CoreField.DBText-ID:={name_id}&CoreField.Last-name:={name}"
-				url = f"{baseurl}{datatable}{parameters}&token={token}"
-				api_call(url, f'Create Source record for', name)
-			else:
-				logger.error(f"We got more than one result for that DBText ID... Something is wrong.")
-		
-		# Link the source to the Business Record
+				if response_data and response_data['ResponseSummary']['TotalItemCount'] == 1:
+					logger.info(f"We got a result in Cortex for that DBText ID. Moving on...")
+				elif response_data and response_data['ResponseSummary']['TotalItemCount'] == 0:
+					logger.warning(f"DBText Name ID {name_id} for {name} not found in Cortex")
+					
+					# Create a Source record
+					parameters = f"Contacts.Source.Default:Create?CoreField.DBText-ID:={name_id}&CoreField.Last-name:={name}"
+					url = f"{baseurl}{datatable}{parameters}&token={token}"
+					api_call(url, f'Create Source record for', name)
+				else:
+					logger.error(f"We got more than one result for that DBText ID... Something is wrong.")
+			
+		# Link the source to the Business Record regardless of whether we checked in Cortex
 		parameters = f"Documents.Folder.Business-document:Update?CoreField.Legacy-Identifier=BR_{record.folder_number}&{link_parameter}=[Contacts.Source.Default:CoreField.DBText-ID={name_id}]"
 		url = f"{baseurl}{datatable}{parameters}&token={token}"
 		api_call(url, f'Link {name} in the {attr} field for', record.folder_number)
@@ -1196,42 +1205,26 @@ def update_business_records(token, filepath, name_id_mapping_file):
 	# Load business records from XML
 	records = load_business_records_data(filepath, name_id_mapping_file)
 
+	count = 1
+	total = len(records)
+	percent = round(count/total, 4)*100
+
+	logger.info(f"Creating/updating {total} Business Records...")
+
 	for record in records:
-		print(f"Folder Number: {record.folder_number}")
-		print(f"Contents: {record.contents}")
-		print(f"Location: {record.archives_location}")
-		print(f"Accession Date: {record.accession_date}")
-		print(f"Record Group: {record.record_group}")
-		print(f"Folder Name: {record.folder_name}")
-		print(f"Series: {record.series}")
-		print(f"Subseries: {record.subseries}")
-		print(f"Date From: {record.date_from}")
-		print(f"Date To: {record.date_to}")
-		print(f"Date Range: {record.date_range}")
-		print(f"Abstract: {record.abstract}")
-		print(f"Notes: {record.notes}")
-		print(f"Subjects: {record.subjects}")
-		print(f"Names: {record.names}")
-		print(f"Contents: {record.contents}")
-		print(f"Content Type: {record.content_type}")
-		print(f"Language: {record.language}")
-		print(f"Archives Location: {record.archives_location}")
-		print(f"Accession Date: {record.accession_date}")
-		print(f"Size: {record.size}")
-		print(f"Condition: {record.condition}")
-		print(f"Make Public?: {record.make_public}")
-		print(f"Is Public?: {record.is_public}")
-		print(f"Digitization Notes: {record.digitization_notes}")
-		print("----")
 
 		# Start making API calls
+		logger.info("===========")
+		logger.info(f'Updating BR {count} of {total} -- {percent}% complete')
+		logger.info("===========")
+
 		# Establish the record in Cortex
 		parameters = (
 			f"Documents.Folder.Business-document:CreateOrUpdate"
 			f"?CoreField.Legacy-Identifier=BR_{record.folder_number}"
 			f"&CoreField.Title:=BR_{record.folder_number} / {record.folder_name}"
 			f"&NYP.Folder-Number:={record.folder_number}"
-			f"&NYP.People--=&NYP.Subjects--=&NYP.Language--="
+			f"&NYP.People--=&NYP.Subjects--=&NYP.Language--=&NYP.Content-Type--="
 			f"&CoreField.Parent-folder:=[Documents.All:CoreField.Identifier={BR_PARENT_FOLDER_IDENTIFIER}]"
 		)
 		url = f"{baseurl}{datatable}{parameters}&token={token}"
@@ -1262,6 +1255,7 @@ def update_business_records(token, filepath, name_id_mapping_file):
 			"NYP.Series+:": record.series,
 			"NYP.Extent:": record.size,
 			"NYP.Condition:": record.condition,
+			"NYP.Content-Type++": record.content_type,
 			"CoreField.notes:": record.notes,
 			"NYP.Digitization-Notes:": record.digitization_notes,
 			"CoreField.visibility-class:": visibility,
@@ -1285,6 +1279,9 @@ def update_business_records(token, filepath, name_id_mapping_file):
 		# Link Subseries to Record
 		if record.subseries:
 			check_and_create_source(record, record.subseries, "Subseries", "NYP.Sub-Series:")
+
+		count += 1
+		percent = round(count/total, 4)*100
 
 	logger.info("Finished updating Business Records")
 
@@ -1381,14 +1378,14 @@ if token and token != '':
 	logger.info(f'We have a token: {token} Proceeding...')
 	print(f'Your token is: {token}')
 
-	# programs = load_program_data(program_xml) # right now we only need to load this data for the program_works function, but we'll eventually update the other functions to use Program objects, so we'll keep this function separate
+	programs = load_program_data(program_xml) # right now we only need to load this data for the program_works function, but we'll eventually update the other functions to use Program objects, so we'll keep this function separate
 
-	# make_folders(token)
-	# update_folders(token)
-	# create_sources(token)
-	# add_sources_to_program(token)
-	# library_updates(token)
-	# program_works(programs, token)
+	make_folders(token)
+	update_folders(token)
+	create_sources(token)
+	add_sources_to_program(token)
+	library_updates(token)
+	program_works(programs, token)
 	update_business_records(token, business_records_xml, name_id_mapping_file)
 
 	logger.info('ALL DONE! Bye bye :)')
