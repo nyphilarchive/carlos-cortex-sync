@@ -78,40 +78,51 @@ def replace_chars(text):
 	return cleaned_text
 
 def reformat_date(date_str, input_format, output_format):
-	# Convert the input date string to a datetime object
-	date_obj = datetime.datetime.strptime(date_str, input_format)
+	try:
+		# Convert the input date string to a datetime object
+		date_obj = datetime.datetime.strptime(date_str, input_format)
+	except ValueError:
+		logger.warning(f"Date string '{date_str}' does not match the expected format '{input_format}'.")
+		return ''
 	# Format the datetime object as specified in the output format
 	formatted_date = date_obj.strftime(output_format)
 	return formatted_date
 
 def process_date(date, output_format):
 	if not date:
-		return ''	
-	if len(date) >= 10:
-		return reformat_date(date, '%d %b %Y', output_format)
-	elif len(date) == 4:
-		return reformat_date(f"01/01/{date}", '%m/%d/%Y', output_format)
-	else:
+		return ''
+	try:
+		if len(date) >= 10:
+			return reformat_date(date, '%d %b %Y', output_format)
+		elif len(date) == 4:
+			return reformat_date(f"01/01/{date}", '%m/%d/%Y', output_format)
+		else:
+			return ''
+	except ValueError as e:
+		logger.error(f"Could not process the date. Error: {e}")
 		return ''
 
 def get_date_range(dates, input_format, output_format):
 	if not dates:
 		return ""
+	try:
+		first_date = dates[0]
+		last_date = dates[-1]
+		if not first_date or not last_date:
+			return ""
 
-	first_date = dates[0]
-	last_date = dates[-1]
-	if not first_date or not last_date:
+		reformatted_first_date = reformat_date(first_date, input_format, output_format)
+		reformatted_last_date = reformat_date(last_date, input_format, output_format)
+
+		# Ensure the order is correct
+		if reformatted_first_date > reformatted_last_date:
+			reformatted_first_date, reformatted_last_date = reformatted_last_date, reformatted_first_date
+
+		date_range = f"{reformatted_first_date}/{reformatted_last_date}"
+		return date_range
+	except ValueError as e:
+		logger.error(f"Could not get the date range. Error: {e}")
 		return ""
-
-	reformatted_first_date = reformat_date(first_date, input_format, output_format)
-	reformatted_last_date = reformat_date(last_date, input_format, output_format)
-
-	# Ensure the order is correct
-	if reformatted_first_date > reformatted_last_date:
-		reformatted_first_date, reformatted_last_date = reformatted_last_date, reformatted_first_date
-
-	date_range = f"{reformatted_first_date}/{reformatted_last_date}"
-	return date_range
 
 
 # Set up our Program classes
@@ -229,8 +240,22 @@ class BusinessRecord:
 		self.record_group = record_element.find('inm:RECORD-GROUP', namespaces=namespace).text
 		self.series = record_element.find('inm:SERIES', namespaces=namespace).text
 		self.subseries = record_element.find('inm:SUB-SERIES', namespaces=namespace).text
-		self.date_from = process_date(record_element.find('inm:FROM', namespaces=namespace).text, '%d %b %Y')
-		self.date_to = process_date(record_element.find('inm:TO', namespaces=namespace).text, '%d %b %Y')
+
+		date_from_element = record_element.find('inm:FROM', namespaces=namespace)
+		date_to_element = record_element.find('inm:TO', namespaces=namespace)
+
+		if date_from_element is not None and date_from_element.text is not None:
+			self.date_from = process_date(date_from_element.text, '%d %b %Y')
+		else:
+			self.date_from = ''
+			logger.warning(f"Missing or invalid 'FROM' date for folder_number: {self.folder_number}")
+
+		if date_to_element is not None and date_to_element.text is not None:
+			self.date_to = process_date(date_to_element.text, '%d %b %Y')
+		else:
+			self.date_to = ''
+			logger.warning(f"Missing or invalid 'TO' date for folder_number: {self.folder_number}")
+
 		self.date_range = get_date_range([self.date_from, self.date_to], '%d %b %Y', '%Y-%m-%d')
 		self.abstract = record_element.find('inm:ABSTRACT', namespaces=namespace).text
 		self.notes = record_element.find('inm:NOTES', namespaces=namespace).text
@@ -240,7 +265,7 @@ class BusinessRecord:
 		self.content_type = record_element.find('inm:CONTENT-TYPE', namespaces=namespace).text
 		self.language = record_element.find('inm:LANGUAGE', namespaces=namespace).text
 		self.archives_location = record_element.find('inm:LOCATION', namespaces=namespace).text
-		self.accession_date = record_element.find('inm:ACCESSION-DATE', namespaces=namespace).text
+		self.accession_date = record_element.find('inm:ACCESSION-DATE-FORMATTED', namespaces=namespace).text
 		self.size = record_element.find('inm:SIZE', namespaces=namespace).text
 		self.condition = record_element.find('inm:CONDITION', namespaces=namespace).text
 		self.make_public = record_element.find('inm:MAKE-PUBLIC', namespaces=namespace).text
@@ -657,10 +682,15 @@ def program_works(programs, token):
 			else:
 				visibility = "Pending"
 
+			# set the title field
+			title = f"{work.composer_name} / {replace_chars(work.title_short)}{movement}"
+			# Truncate to 200 characters if necessary
+			title = title[:200]
+
 			parameters = (
 				f"Documents.Virtual-Folder.Program-Work:CreateOrUpdate"
 				f"?CoreField.Legacy-Identifier={work.program_works_id}"
-				f"&CoreField.Title:={work.composer_name} / {replace_chars(work.title_short)}{movement}"
+				f"&CoreField.Title:={title}"
 				f"&CoreField.Parent-folder:=[Documents.Virtual-folder.Program:CoreField.Legacy-identifier={program.id}]"
 				f"&NYP.Program-ID:={program.id}"
 				f"&NYP.Composer/Work--=&NYP.Conductor--=&NYP.Composer--=&NYP.Soloist--="
@@ -769,18 +799,31 @@ def program_works(programs, token):
 					api_call(url, f'Link Soloist {soloist} to Program Work', work.program_works_id)
 
 			# add paired-value field for soloist/instrument: https://link.orangelogic.com/CMS4/LMS/Home/Published-Documentation/API/Update-a-Paired-Value-Field-Using-the-CreateOrUpdate-API/
-				for name, inst, role in zip(work.works_soloists_names.split(';') if work.works_soloists_names else '', work.works_soloists_inst_names.split(';') if work.works_soloists_inst_names else '', work.works_soloists_functions.split(';') if work.works_soloists_functions else ''):
+			for name, inst, role in zip(
+				work.works_soloists_names.split(';') if work.works_soloists_names else [''], 
+				work.works_soloists_inst_names.split(';') if work.works_soloists_inst_names else [''], 
+				work.works_soloists_functions.split(';') if work.works_soloists_functions else ['']
+			):
 
-					soloist_inst = f"{name.strip()} / {inst.strip()}"
-					soloist_role = f"{role.strip().replace('S','Soloist').replace('A','Assisting Artist')}"
+				# Check for null or blank values and log them
+				if not name.strip():
+					logger.warning(f"Null or blank value for name in Program Work ID {work.program_works_id}")
+				if not inst.strip():
+					logger.warning(f"Null or blank value for instrument in Program Work ID {work.program_works_id}")
+				if not role.strip():
+					logger.warning(f"Null or blank value for role in Program Work ID {work.program_works_id}")
 
-					parameters = (
-						f"Documents.Virtual-Folder.Program-work:Update"
-						f"?CoreField.Legacy-Identifier={work.program_works_id}"
-						f"&NYP.Soloist-/-Instrument-/-Role++={soloist_inst}{{'LinkedKeyword':'{soloist_role}'}}"
-					)
-					url = f"{baseurl}{datatable}{parameters}&token={token}"
-					api_call(url,'Add soloist and role to Program Work',work.program_works_id)
+				# Prepare parameters for the API call
+				soloist_inst = f"{name.strip()} / {inst.strip()}"
+				soloist_role = f"{role.strip().replace('S','Soloist').replace('A','Assisting Artist')}"
+
+				parameters = (
+					f"Documents.Virtual-Folder.Program-work:Update"
+					f"?CoreField.Legacy-Identifier={work.program_works_id}"
+					f"&NYP.Soloist-/-Instrument-/-Role++={soloist_inst}{{'LinkedKeyword':'{soloist_role}'}}"
+				)
+				url = f"{baseurl}{datatable}{parameters}&token={token}"
+				api_call(url, 'Add soloist and role to Program Work', work.program_works_id)
 
 			# link the conductors
 			if work.works_conductor_ids is not None:
