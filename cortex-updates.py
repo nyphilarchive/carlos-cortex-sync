@@ -658,9 +658,8 @@ def program_works(programs, token):
 	# for program in update_list:
 	for program in programs:
 		
-		# iterate through the Program Works but skip intermissions
-		filtered_program_works = [work for work in program.program_works if work.works_id != '0']
-		for work in filtered_program_works:
+		# iterate through the Program Works
+		for work in program.program_works:
 
 			for attr, value in vars(program).items():
 				print(f"{attr}: {value}")
@@ -686,6 +685,8 @@ def program_works(programs, token):
 			title = f"{work.composer_name} / {replace_chars(work.title_short)}{movement}"
 			# Truncate to 200 characters if necessary
 			title = title[:200]
+			if title.endswith(', / .'):
+				title = title[:-5]
 
 			parameters = (
 				f"Documents.Virtual-Folder.Program-Work:CreateOrUpdate"
@@ -805,13 +806,17 @@ def program_works(programs, token):
 				work.works_soloists_functions.split(';') if work.works_soloists_functions else ['']
 			):
 
-				# Check for null or blank values and log them
-				if not name.strip():
-					logger.warning(f"Null or blank value for name in Program Work ID {work.program_works_id}")
-				if not inst.strip():
-					logger.warning(f"Null or blank value for instrument in Program Work ID {work.program_works_id}")
-				if not role.strip():
-					logger.warning(f"Null or blank value for role in Program Work ID {work.program_works_id}")
+				# Strip the values to remove any extra spaces
+				name, inst, role = name.strip(), inst.strip(), role.strip()
+
+				# Only log a warning if at least one value is non-empty
+				if any([name, inst, role]):
+					if not name:
+						logger.warning(f"Null or blank value for name in Program Work ID {work.program_works_id}")
+					if not inst:
+						logger.warning(f"Null or blank value for instrument in Program Work ID {work.program_works_id}")
+					if not role:
+						logger.warning(f"Null or blank value for role in Program Work ID {work.program_works_id}")
 
 				# Prepare parameters for the API call
 				soloist_inst = f"{name.strip()} / {inst.strip()}"
@@ -1421,15 +1426,15 @@ if token and token != '':
 	logger.info(f'We have a token: {token} Proceeding...')
 	print(f'Your token is: {token}')
 
-	programs = load_program_data(program_xml) # right now we only need to load this data for the program_works function, but we'll eventually update the other functions to use Program objects, so we'll keep this function separate
+	# programs = load_program_data(program_xml) # right now we only need to load this data for the program_works function, but we'll eventually update the other functions to use Program objects, so we'll keep this function separate
 
 	make_folders(token)
 	update_folders(token)
 	create_sources(token)
 	add_sources_to_program(token)
 	library_updates(token)
-	program_works(programs, token)
-	update_business_records(token, business_records_xml, name_id_mapping_file)
+	# program_works(programs, token)
+	# update_business_records(token, business_records_xml, name_id_mapping_file)
 
 	logger.info('ALL DONE! Bye bye :)')
 
