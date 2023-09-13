@@ -23,6 +23,8 @@ from requests.exceptions import HTTPError
 from dotenv import load_dotenv
 import xml.etree.ElementTree as ET
 from lxml import etree
+from fuzzywuzzy import process
+
 
 # First, grab credentials and other values from the .env file in the same folder as this script
 dotenv_path = join(dirname(__file__), '.env')
@@ -276,7 +278,20 @@ class BusinessRecord:
 		self.name_id_mapping = name_id_mapping
 
 	def get_id_for_name(self, name):
-		return self.name_id_mapping.get(name, None)  # Return None if name is not found
+	    if name in self.name_id_mapping:
+	        logging.info(f"Exact match found: {name} -> {self.name_id_mapping[name]}")
+	        return self.name_id_mapping[name]
+
+	    # Perform fuzzy matching if exact match not found
+	    best_match, score = process.extractOne(name, self.name_id_mapping.keys())
+	    
+	    # Set a threshold for how "fuzzy" we want our matches to be
+	    if score >= 90:
+	        logging.info(f"Fuzzy match found: {name} -> {best_match} with score {score}")
+	        return self.name_id_mapping[best_match]
+
+	    logging.warning(f"No satisfactory match found for {name}. Best match was {best_match} with score {score}")
+	    return None
 
 
 # Load Business Record data from the source XML
@@ -1270,7 +1285,6 @@ def update_business_records(token, filepath, name_id_mapping_file):
 		parameters = (
 			f"Documents.Folder.Business-document:CreateOrUpdate"
 			f"?CoreField.Legacy-Identifier=BR_{record.folder_number}"
-			f"&CoreField.Title:=BR_{record.folder_number} / {record.folder_name}"
 			f"&NYP.Folder-Number:={record.folder_number}"
 			f"&NYP.People--=&NYP.Subjects--=&NYP.Language--=&NYP.Content-Type--="
 			f"&CoreField.Parent-folder:=[Documents.All:CoreField.Identifier={BR_PARENT_FOLDER_IDENTIFIER}]"
@@ -1290,9 +1304,10 @@ def update_business_records(token, filepath, name_id_mapping_file):
 		else:
 			accession_date = ''
 
-		# Add more metadata, this time in JSON format so we don't bump into API character limits
+		# Add more metadata
 		data = {
 			"CoreField.Legacy-Identifier": f"BR_{record.folder_number}",
+			"CoreField.Title:": f"BR_{record.folder_number} / {record.folder_name}",
 			"CoreField.Description:": record.abstract.strip() if record.abstract else '',
 			"NYP.Archives-Folder-Title:": record.folder_name,
 			"NYP.Date-Range:": record.date_range,
@@ -1428,13 +1443,13 @@ if token and token != '':
 
 	# programs = load_program_data(program_xml) # right now we only need to load this data for the program_works function, but we'll eventually update the other functions to use Program objects, so we'll keep this function separate
 
-	make_folders(token)
-	update_folders(token)
-	create_sources(token)
-	add_sources_to_program(token)
-	library_updates(token)
+	# make_folders(token)
+	# update_folders(token)
+	# create_sources(token)
+	# add_sources_to_program(token)
+	# library_updates(token)
 	# program_works(programs, token)
-	# update_business_records(token, business_records_xml, name_id_mapping_file)
+	update_business_records(token, business_records_xml, name_id_mapping_file)
 
 	logger.info('ALL DONE! Bye bye :)')
 
