@@ -49,6 +49,7 @@ name_id_mapping_file = f"{dbtext_xml_path}/names-1.csv"
 WORK_PARENT_FOLDER_IDENTIFIER = "PH1QHU6"
 PM_PARENT_FOLDER_IDENTIFIER = "PH1N31F"
 BR_PARENT_FOLDER_IDENTIFIER = "PH1N31H"
+PAGE_IMPORT_MAPPING_TEMPLATE = "2TTUSVANGT"
 
 # Some helper functions for data cleanup
 def xpath_text(element, path):
@@ -287,10 +288,10 @@ class BusinessRecord:
 	    
 	    # Set a threshold for how "fuzzy" we want our matches to be
 	    if score >= 90:
-	        logger.info(f"Fuzzy match found: {name} -> {best_match} with score {score}")
+	        logger.warning(f"Fuzzy match found: {name} -> {best_match} with score {score}")
 	        return self.name_id_mapping[best_match]
 
-	    logger.warning(f"No satisfactory match found for {name}. Best match was {best_match} with score {score}")
+	    logger.error(f"No satisfactory match found for {name}. Best match was {best_match} with score {score}")
 	    return None
 
 
@@ -1034,6 +1035,7 @@ def library_updates(token):
 			data = {
 				'CoreField.Legacy-Identifier': f'MS_{legacy_id}',
 				'CoreField.parent-folder:': f'[Documents.Folder.Printed-Music:CoreField.Legacy-Identifier={legacy_id}]',
+				'CoreField.Import-Field-Mapping-Template:': PAGE_IMPORT_MAPPING_TEMPLATE,
 				'CoreField.Title:': f'MS_{legacy_id}',
 				'NYP.Publisher+:': publisher_name,
 				'NYP.Edition-Type+:': score_edition_type,
@@ -1102,6 +1104,7 @@ def library_updates(token):
 					data = {
 						'CoreField.Legacy-Identifier': f'MP_{part_id}',
 						'CoreField.parent-folder:': f'[Documents.Folder.Printed-Music:CoreField.Legacy-Identifier={legacy_id}]',
+						'CoreField.Import-Field-Mapping-Template:': PAGE_IMPORT_MAPPING_TEMPLATE,
 						'CoreField.Title:': f'MP_{part_id} - {part_type_desc[index]}',
 						'NYP.Publisher+:': publisher_name,
 						'NYP.Edition-Type+:': part_edition_type[index],
@@ -1288,6 +1291,7 @@ def update_business_records(token, filepath, name_id_mapping_file):
 			f"&NYP.Folder-Number:={record.folder_number}"
 			f"&NYP.People--=&NYP.Subjects--=&NYP.Language--=&NYP.Content-Type--="
 			f"&CoreField.Parent-folder:=[Documents.All:CoreField.Identifier={BR_PARENT_FOLDER_IDENTIFIER}]"
+			f"&CoreField.Import-Field-Mapping-Template:={PAGE_IMPORT_MAPPING_TEMPLATE}"
 		)
 		url = f"{baseurl}{datatable}{parameters}&token={token}"
 		api_call(url,'Establish Business Record',record.folder_number)
@@ -1443,11 +1447,11 @@ if token and token != '':
 
 	# programs = load_program_data(program_xml) # right now we only need to load this data for the program_works function, but we'll eventually update the other functions to use Program objects, so we'll keep this function separate
 
-	# make_folders(token)
-	# update_folders(token)
-	# create_sources(token)
-	# add_sources_to_program(token)
-	# library_updates(token)
+	make_folders(token)
+	update_folders(token)
+	create_sources(token)
+	add_sources_to_program(token)
+	library_updates(token)
 	# program_works(programs, token)
 	update_business_records(token, business_records_xml, name_id_mapping_file)
 
