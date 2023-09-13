@@ -279,7 +279,7 @@ class BusinessRecord:
 
 	def get_id_for_name(self, name):
 	    if name in self.name_id_mapping:
-	        logging.info(f"Exact match found: {name} -> {self.name_id_mapping[name]}")
+	        logger.info(f"Exact match found: {name} -> {self.name_id_mapping[name]}")
 	        return self.name_id_mapping[name]
 
 	    # Perform fuzzy matching if exact match not found
@@ -287,10 +287,10 @@ class BusinessRecord:
 	    
 	    # Set a threshold for how "fuzzy" we want our matches to be
 	    if score >= 90:
-	        logging.info(f"Fuzzy match found: {name} -> {best_match} with score {score}")
+	        logger.info(f"Fuzzy match found: {name} -> {best_match} with score {score}")
 	        return self.name_id_mapping[best_match]
 
-	    logging.warning(f"No satisfactory match found for {name}. Best match was {best_match} with score {score}")
+	    logger.warning(f"No satisfactory match found for {name}. Best match was {best_match} with score {score}")
 	    return None
 
 
