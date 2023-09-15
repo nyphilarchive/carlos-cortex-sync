@@ -41,9 +41,11 @@ carlos_xml_path = os.environ.get('carlos_xml_path', 'default')
 dbtext_xml_path = os.environ.get('dbtext_xml_path', 'default')
 
 # File paths for our source data
-program_xml = f"{carlos_xml_path}/program_updates.xml"
-business_records_xml = f"{dbtext_xml_path}/CTLG1024-1.xml"
-name_id_mapping_file = f"{dbtext_xml_path}/names-1.csv"
+program_xml = f"{carlos_xml_path}/program_updates.xml" #Program Deltas
+# program_xml = f"{carlos_xml_path}/program.xml" #All programs
+# business_records_xml = f"{dbtext_xml_path}/CTLG1024-1.xml" #BR Deltas
+business_records_xml = f"{dbtext_xml_path}/CTLG1024-1_full.xml" #ALL BRs
+name_id_mapping_file = f"{dbtext_xml_path}/names-1.csv" #All DBText names
 
 # Constants
 WORK_PARENT_FOLDER_IDENTIFIER = "PH1QHU6"
@@ -298,11 +300,12 @@ class BusinessRecord:
 # Load Business Record data from the source XML
 def load_business_records_data(file_path, name_id_mapping_file):
 	# Load the name ID mapping from the CSV file
+	# CSV is in the format DateChanged|ID|Term
 	name_id_mapping = {}
 	with open(name_id_mapping_file, 'r') as csvfile:
 		csvreader = csv.reader(csvfile, delimiter='|')
 		for row in csvreader:
-			name_id_mapping[row[1]] = row[0]
+			name_id_mapping[row[2]] = row[1]
 
 	# Load Business Records data from a file
 	with open(file_path, 'r') as file:
@@ -450,6 +453,7 @@ def update_folders(token):
 			COMPOSER_TITLE = row[11].replace('|','\n\n').replace('Intermission, / .','Intermission').replace('<','').replace('>','')
 			COMPOSER_TITLE_SHORT = remove_angle_brackets(row[12])
 			NOTES_XML = row[13].replace('<br>','\n')
+			RELATED_PROGRAMS = row[14].split('|')
 
 			# get the Digital Archives (Hadoop) ID from public Solr
 			lookup = f"http://proslrapp01.nyphil.live:9993/solr/assets/select?q=npp%5C%3AProgramID%3A{ID}&fl=id&wt=json"
@@ -503,7 +507,7 @@ def update_folders(token):
 			logger.info(f'Updating Program {count} of {total} = {percent}% complete')
 
 			# clear values from program folders
-			parameters = f"Documents.Virtual-folder.Program:Update?CoreField.Legacy-Identifier={ID}&NYP.Season--=&NYP.Program-Date(s)--=&NYP.Program-Times--=&NYP.Location--=&NYP.Venue--=&NYP.Event-Type--=&NYP.Composer/Work--=&NYP.Soloist--=&NYP.Conductor--=&NYP.Composer--="
+			parameters = f"Documents.Virtual-folder.Program:Update?CoreField.Legacy-Identifier={ID}&NYP.Season--=&NYP.Program-Date(s)--=&NYP.Program-Times--=&NYP.Location--=&NYP.Venue--=&NYP.Event-Type--=&NYP.Composer/Work--=&NYP.Soloist--=&NYP.Conductor--=&NYP.Composer--=&NYP.Related-Programs--="
 			call = baseurl + datatable + parameters + '&token=' + token
 			api_call(call,'Program - clear old metadata',ID)
 			
@@ -513,7 +517,16 @@ def update_folders(token):
 			url = baseurl + datatable + action
 			api_call(url,'Program - add new metadata',ID,params,data)
 
-			# create Related Program relationships - TO DO
+			# Link Related Programs to the Program
+			for related_program in RELATED_PROGRAMS:
+				parameters = (
+					f"Documents.Virtual-folder.Program:Update"
+					f"?CoreField.Legacy-Identifier={ID}"
+					f"&NYP.Related-Programs=[Documents.Virtual-Folder.Program:Read?CoreField.Legacy-Identifier={related_program}]"
+				)
+				url = f"{baseurl}{datatable}{parameters}&token={token}"
+				logger.info(url)
+				api_call(url,f'Link Related Program {related_program} to Program',program.id)
 
 			count += 1
 			percent = round(count/total, 4)*100
@@ -931,7 +944,7 @@ def library_updates(token):
 		# clear old values
 		parameters = (
 			f"Documents.Folder.Printed-Music:CreateOrUpdate"
-			f"?CoreField.Legacy-Identifier={legacy_id}"
+			f"?CoreField.Legacy-Identifier=PM_{legacy_id}"
 			f"&NYP.Composer/Work--=&NYP.Marking-Artist--=&NYP.Conductor--=&NYP.Composer--="
 		)
 		url = f"{baseurl}{datatable}{parameters}&token={token}"
@@ -939,7 +952,7 @@ def library_updates(token):
 
 		# Send this data as a JSON payload because it might exceed the character limit for a regular API call
 		data = {
-			'CoreField.Legacy-Identifier': legacy_id,
+			'CoreField.Legacy-Identifier': f'PM_{legacy_id}',
 			'CoreField.parent-folder:': f'[Documents.All:CoreField.Identifier={PM_PARENT_FOLDER_IDENTIFIER}]',
 			'CoreField.Title:': title,
 			'NYP.Publisher+:': publisher_name,
@@ -959,7 +972,7 @@ def library_updates(token):
 		# link work to record
 		parameters = (
 			f"Documents.Folder.Printed-Music:Update"
-			f"?CoreField.Legacy-Identifier={legacy_id}"
+			f"?CoreField.Legacy-Identifier=PM_{legacy_id}"
 			f"&NYP.Composer-/-Work+=[Documents.Virtual-folder.Work:CoreField.Legacy-identifier=WORK_{works_id}]"
 		)
 		url = f"{baseurl}{datatable}{parameters}&token={token}"
@@ -968,7 +981,7 @@ def library_updates(token):
 		# link composer to record
 		parameters = (
 			f"Documents.Folder.Printed-Music:Update"
-			f"?CoreField.Legacy-Identifier={legacy_id}"
+			f"?CoreField.Legacy-Identifier=PM_{legacy_id}"
 			f"&NYP.Composer+=[Contacts.Source.Default:CoreField.Composer-ID={composer_id}]"
 		)
 		url = f"{baseurl}{datatable}{parameters}&token={token}"
@@ -998,7 +1011,7 @@ def library_updates(token):
 				# now link them to the record
 				parameters = (
 					f"Documents.Folder.Printed-Music:Update"
-					f"?CoreField.Legacy-Identifier={legacy_id}"
+					f"?CoreField.Legacy-Identifier=PM_{legacy_id}"
 					f"&NYP.Marking-Artist+=[Contacts.Source.Default:CoreField.Artist-ID={marking_id}]"
 				)
 				url = f"{baseurl}{datatable}{parameters}&token={token}"
@@ -1011,7 +1024,7 @@ def library_updates(token):
 			for user in usedby_ids:
 				parameters = (
 					f"Documents.Folder.Printed-Music:Update"
-					f"?CoreField.Legacy-Identifier={legacy_id}"
+					f"?CoreField.Legacy-Identifier=PM_{legacy_id}"
 					f"&NYP.Conductor+=[Contacts.Source.Default:CoreField.Artist-ID={user}]"
 				)
 				url = f"{baseurl}{datatable}{parameters}&token={token}"
@@ -1034,7 +1047,7 @@ def library_updates(token):
 			# Send this data as a JSON payload because it might exceed the character limit for a regular API call
 			data = {
 				'CoreField.Legacy-Identifier': f'MS_{legacy_id}',
-				'CoreField.parent-folder:': f'[Documents.Folder.Printed-Music:CoreField.Legacy-Identifier={legacy_id}]',
+				'CoreField.parent-folder:': f'[Documents.Folder.Printed-Music:CoreField.Legacy-Identifier=PM_{legacy_id}]',
 				'CoreField.Import-Field-Mapping-Template:': PAGE_IMPORT_MAPPING_TEMPLATE,
 				'CoreField.Title:': f'MS_{legacy_id}',
 				'NYP.Publisher+:': publisher_name,
@@ -1103,7 +1116,7 @@ def library_updates(token):
 					# Send this data as a JSON payload because it might exceed the character limit for a regular API call
 					data = {
 						'CoreField.Legacy-Identifier': f'MP_{part_id}',
-						'CoreField.parent-folder:': f'[Documents.Folder.Printed-Music:CoreField.Legacy-Identifier={legacy_id}]',
+						'CoreField.parent-folder:': f'[Documents.Folder.Printed-Music:CoreField.Legacy-Identifier=PM_{legacy_id}]',
 						'CoreField.Import-Field-Mapping-Template:': PAGE_IMPORT_MAPPING_TEMPLATE,
 						'CoreField.Title:': f'MP_{part_id} - {part_type_desc[index]}',
 						'NYP.Publisher+:': publisher_name,
@@ -1217,11 +1230,61 @@ def library_updates(token):
 	logger.info('All done with Printed Music updates!')
 
 
+# update Concert Program folders
+def concert_programs(programs, token):
+	logger.info("Starting to update Concert Program folders...")
+
+	count = 1
+	total = len(programs)
+	percent = round(count/total, 4)*100
+
+	logger.info(f"Creating/updating {total} Concert Program folders...")
+
+	for program in programs:
+
+		# Start making API calls
+		logger.info("===========")
+		logger.info(f'Updating Folder {count} of {total} -- {percent}% complete')
+		logger.info("===========")
+
+		# Create a folder within Archives/Concert Programs in the correct season and in the format PR_1234
+		parameters = (
+			f"Documents.Folder.Concert-program:CreateOrUpdate"
+			f"?CoreField.Legacy-Identifier=PR_{program.id}"
+			f"&CoreField.Title:=PR_{program.id}"
+			f"&CoreField.visibility-class:=Public"
+			f"&NYP.Program-ID:={program.id}"
+			f"&NYP.Season+={program.season}"
+			f"&CoreField.Parent-folder:=[Documents.Folder.Default:CoreField.Legacy-Identifier=PR_{program.season}]"
+		)
+		url = f"{baseurl}{datatable}{parameters}&token={token}"
+		logger.info(url)
+		api_call(url,'Create/Update Concert Program folder for Program',program.id)
+
+		# Create an asset link with the corresponding Program virtual folder
+		parameters = (
+			f"Documents-links:ParentChildLink"
+			f"?ParentRecord=[DataTable/V2.2/Documents.Virtual-Folder.Program:Read?CoreField.Legacy-Identifier={program.id}]"
+			f"&ChildRecords=[DataTable/v2.2/Documents.Folder.Concert-program:Read?CoreField.Legacy-Identifier=PR_{program.id}]"
+		)
+		url = f"{baseurl}{datatable}{parameters}&token={token}"
+		logger.info(url)
+		api_call(url,'Link Concert Program folder to Program record',program.id)
+
+		count += 1
+		percent = round(count/total, 4)*100
+
+	logger.info("Finished updating Concert Program folders")
+
+
 # update Business Records
 def update_business_records(token, filepath, name_id_mapping_file):
 
 	# Initialize a set to store checked DBText IDs
 	dbtext_id_checked = set()
+
+	# Initialize a set to store checked Boxes
+	box_checked = set()
 
 	def check_and_create_source(record, name, attr, link_parameter):
 		name_id = record.get_id_for_name(name)
@@ -1284,20 +1347,86 @@ def update_business_records(token, filepath, name_id_mapping_file):
 		logger.info(f'Updating BR {count} of {total} -- {percent}% complete')
 		logger.info("===========")
 
+		# Make sure the Box folder exists; if not, create it and set as parent folder
+		box_number = record.folder_number.rsplit('-', 1)[0]
+
+		# Initialize a flag to control whether we should check the box in Cortex
+		should_check_cortex = True
+
+		if box_number in box_checked:
+			logger.info(f"We already checked {box_number} in Cortex. Moving on...")
+			should_check_cortex = False
+			
+		if should_check_cortex:
+			# Check if this Box exists in Cortex
+			parameters = f'Documents.Folder.Archives-Box:Read?CoreField.Legacy-Identifier=BOX_{box_number}&format=json'
+			query = f"{baseurl}{datatable}{parameters}&token={token}"
+			response = api_call(query, 'Checking if exists in Cortex: Box Number', box_number)
+			
+			if response:
+				response_data = response.json()
+				box_checked.add(box_number)
+
+				if response_data and response_data['ResponseSummary']['TotalItemCount'] == 1:
+					logger.info(f"We got a result in Cortex for that Box. Moving on...")
+				elif response_data and response_data['ResponseSummary']['TotalItemCount'] == 0:
+					logger.warning(f"Box {box_number} not found in Cortex")
+					
+					# Create a Box folder
+					parameters = f"Documents.Folder.Archives-Box:Create?CoreField.Legacy-Identifier:=BOX_{box_number}&CoreField.Title:={box_number}&CoreField.Parent-folder:=[Documents.Folder.Default:CoreField.Identifier={BR_PARENT_FOLDER_IDENTIFIER}]"
+					url = f"{baseurl}{datatable}{parameters}&token={token}"
+					api_call(url, f'Create Box folder for', box_number)
+				else:
+					logger.error(f"We got more than one result for that Box number... Something is wrong.")
+
+		"""
+		See if this folder already exists in Cortex and what the parent folder is
+		If the folder exists and the existing parent is correct, we can skip that parameter in the API call
+		This will prevent Cortex from changing the manual order of the BR within the Box folder
+		"""
+		parameters = f'CoreField.Legacy-Identifier:BR_{record.folder_number} DocSubType:Business-document&fields=Document.LineageParentName&format=json'
+		query = f'{baseurl}/API/search/v3.0/search?query={parameters}&token={token}'
+		try:
+			r = requests.get(query)
+		except:
+			logger.warning(f'Unable to find Business Record {record.folder_number}')
+			pass
+
+		if r:
+			r_data = r.json()
+			if r_data["APIResponse"]["GlobalInfo"]["TotalCount"] == 1:
+				# We got one result, which is good
+				existing_parent_id = r_data["APIResponse"]["Items"][0]["Document.LineageParentName"]
+			else:
+				# We have no result, or more than one parent, so we'll assign the parent as usual
+				existing_parent_id = ""
+		else:
+			existing_parent_id = ""
+			logger.warning(f"Unable to find Business Record {record.folder_number}")
+
+		"""
+		Now we can compare the parent_id from Cortex to the Box Number
+		If the values match, do not update this field
+		"""
+		if existing_parent_id == box_number:
+			update_parent = ""
+		else:
+			update_parent = f"&CoreField.Parent-folder:=[Documents.Folder.Archives-Box:CoreField.Legacy-identifier=BOX_{box_number}]"
+
 		# Establish the record in Cortex
 		parameters = (
 			f"Documents.Folder.Business-document:CreateOrUpdate"
 			f"?CoreField.Legacy-Identifier=BR_{record.folder_number}"
 			f"&NYP.Folder-Number:={record.folder_number}"
 			f"&NYP.People--=&NYP.Subjects--=&NYP.Language--=&NYP.Content-Type--="
-			f"&CoreField.Parent-folder:=[Documents.All:CoreField.Identifier={BR_PARENT_FOLDER_IDENTIFIER}]"
 			f"&CoreField.Import-Field-Mapping-Template:={PAGE_IMPORT_MAPPING_TEMPLATE}"
+			f"{update_parent}"
 		)
 		url = f"{baseurl}{datatable}{parameters}&token={token}"
-		api_call(url,'Establish Business Record',record.folder_number)
+		api_call(url,"Establish Business Record",record.folder_number)
 
 		# Should this be Public?
-		if (record.make_public and record.make_public.startswith('Y')) or (record.is_public and record.is_public.startswith('Y')):
+		if (record.make_public and record.make_public.startswith("Y")) or (record.is_public and record.is_public.startswith("Y")):
 			visibility = "Public"
 		else:
 			visibility = "Hidden"
@@ -1447,12 +1576,13 @@ if token and token != '':
 
 	# programs = load_program_data(program_xml) # right now we only need to load this data for the program_works function, but we'll eventually update the other functions to use Program objects, so we'll keep this function separate
 
-	make_folders(token)
-	update_folders(token)
-	create_sources(token)
-	add_sources_to_program(token)
-	library_updates(token)
+	# make_folders(token)
+	# update_folders(token)
+	# create_sources(token)
+	# add_sources_to_program(token)
+	# library_updates(token)
 	# program_works(programs, token)
+	# concert_programs(programs, token)
 	update_business_records(token, business_records_xml, name_id_mapping_file)
 
 	logger.info('ALL DONE! Bye bye :)')
