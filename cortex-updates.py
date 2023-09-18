@@ -43,8 +43,8 @@ dbtext_xml_path = os.environ.get('dbtext_xml_path', 'default')
 # File paths for our source data
 program_xml = f"{carlos_xml_path}/program_updates.xml" #Program Deltas
 # program_xml = f"{carlos_xml_path}/program.xml" #All programs
-# business_records_xml = f"{dbtext_xml_path}/CTLG1024-1.xml" #BR Deltas
-business_records_xml = f"{dbtext_xml_path}/CTLG1024-1_full.xml" #ALL BRs
+business_records_xml = f"{dbtext_xml_path}/CTLG1024-1.xml" #BR Deltas
+# business_records_xml = f"{dbtext_xml_path}/CTLG1024-1_full.xml" #ALL BRs
 name_id_mapping_file = f"{dbtext_xml_path}/names-1.csv" #All DBText names
 
 # Constants
@@ -518,15 +518,23 @@ def update_folders(token):
 			api_call(url,'Program - add new metadata',ID,params,data)
 
 			# Link Related Programs to the Program
-			for related_program in RELATED_PROGRAMS:
-				parameters = (
-					f"Documents.Virtual-folder.Program:Update"
-					f"?CoreField.Legacy-Identifier={ID}"
-					f"&NYP.Related-Programs=[Documents.Virtual-Folder.Program:Read?CoreField.Legacy-Identifier={related_program}]"
-				)
-				url = f"{baseurl}{datatable}{parameters}&token={token}"
-				logger.info(url)
-				api_call(url,f'Link Related Program {related_program} to Program',program.id)
+			if RELATED_PROGRAMS:
+				for related_program in RELATED_PROGRAMS:
+					# Skip if related_program is None or an empty string
+					if not related_program:
+						logger.info(f"No related programs for Program ID {ID}")
+						continue
+					
+					parameters = (
+						f"Documents.Virtual-folder.Program:Update"
+						f"?CoreField.Legacy-Identifier={ID}"
+						f"&NYP.Related-Programs+=[Documents.Virtual-Folder.Program:Read?CoreField.Legacy-Identifier={related_program}]"
+					)
+					url = f"{baseurl}{datatable}{parameters}&token={token}"
+					logger.info(url)
+					api_call(url, f'Link Related Program {related_program} to Program', ID)
+			else:
+				logger.info(f"No related programs for Program ID {ID}")
 
 			count += 1
 			percent = round(count/total, 4)*100
@@ -1574,15 +1582,15 @@ if token and token != '':
 	logger.info(f'We have a token: {token} Proceeding...')
 	print(f'Your token is: {token}')
 
-	# programs = load_program_data(program_xml) # right now we only need to load this data for the program_works function, but we'll eventually update the other functions to use Program objects, so we'll keep this function separate
+	programs = load_program_data(program_xml) # right now we only need to load this data for the program_works function, but we'll eventually update the other functions to use Program objects, so we'll keep this function separate
 
-	# make_folders(token)
-	# update_folders(token)
-	# create_sources(token)
-	# add_sources_to_program(token)
-	# library_updates(token)
+	make_folders(token)
+	update_folders(token)
+	create_sources(token)
+	add_sources_to_program(token)
+	library_updates(token)
 	# program_works(programs, token)
-	# concert_programs(programs, token)
+	concert_programs(programs, token)
 	update_business_records(token, business_records_xml, name_id_mapping_file)
 
 	logger.info('ALL DONE! Bye bye :)')
