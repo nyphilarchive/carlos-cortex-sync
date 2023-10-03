@@ -373,7 +373,10 @@ def make_folders(token):
 		# Loop through rows for primary folders first and make sure they're created
 		count = 1
 		total = len(rows[1:])
-		percent = round(count/total, 4)*100
+		if total != 0:
+			percent = round(count/total, 4)*100
+		else:
+			percent = 0
 
 		for row in rows[1:]:
 			season_folder_id = row[0]
@@ -437,7 +440,10 @@ def update_folders(token):
 		count = 1
 		records = list(csvfile)
 		total = len(records[1:])
-		percent = round(count/total, 4)*100
+		if total != 0:
+			percent = round(count/total, 4)*100
+		else:
+			percent = 0
 
 		for row in records[1:]:
 			ID = row[0]
@@ -1244,7 +1250,10 @@ def concert_programs(programs, token):
 
 	count = 1
 	total = len(programs)
-	percent = round(count/total, 4)*100
+	if total != 0:
+		percent = round(count/total, 4)*100
+	else:
+		percent = 0
 
 	logger.info(f"Creating/updating {total} Concert Program folders...")
 
@@ -1344,8 +1353,11 @@ def update_business_records(token, filepath, name_id_mapping_file):
 
 	count = 1
 	total = len(records)
-	percent = round(count/total, 4)*100
-
+	if total != 0:
+		percent = round(count/total, 4)*100
+	else:
+		percent = 0
+		
 	logger.info(f"Creating/updating {total} Business Records...")
 
 	for record in records:
