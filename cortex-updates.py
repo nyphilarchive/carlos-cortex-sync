@@ -534,7 +534,7 @@ def update_folders(token):
 					parameters = (
 						f"Documents.Virtual-folder.Program:Update"
 						f"?CoreField.Legacy-Identifier={ID}"
-						f"&NYP.Related-Programs+=[Documents.Virtual-Folder.Program:Read?CoreField.Legacy-Identifier={related_program}]"
+						f"&NYP.Related-Programs+=[Documents.Virtual-Folder.Program:CoreField.Legacy-Identifier={related_program}]"
 					)
 					url = f"{baseurl}{datatable}{parameters}&token={token}"
 					logger.info(url)
