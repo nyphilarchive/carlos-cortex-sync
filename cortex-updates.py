@@ -435,7 +435,6 @@ def update_folders(token):
 	
 	with open(directory+'program_data_for_cortex.csv', 'r', encoding='UTF-8') as file:
 		csvfile = csv.reader(file)
-		next(csvfile)
 
 		count = 1
 		records = list(csvfile)

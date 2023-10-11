@@ -75,7 +75,7 @@ def make_folders(data,all_data):
 	# with open(directory+'cortex_folder_names.json', 'w', encoding='UTF-8') as jsonfile:
 	# 	jsonfile.write(json.dumps(folders, indent=4))
 
-	fieldnames = folders[1].keys()
+	fieldnames = folders[0].keys()
 	with open(directory+'cortex/cortex_folder_names.csv', 'w', newline='', encoding='UTF-8') as csvfile:
 		writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
 		writer.writeheader()
