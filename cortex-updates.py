@@ -1600,7 +1600,7 @@ def update_program_visibility(token):
 	
 	if response.status_code == 200:
 		json_data = response.json()
-		today_date = datetime.now().date()
+		today_date = datetime.datetime.now().date()
 
 		programs_to_update = 0
 
