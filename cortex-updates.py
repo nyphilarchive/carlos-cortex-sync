@@ -1039,7 +1039,7 @@ def library_updates(token):
 			display = ""
 
 		# Format the asset title
-		title = f"{composer_name} / {ar_works_title} - {display}"
+		title = f"{composer_name} - {ar_works_title} - {display}"
 
 		# Create/Update the Printed Music record
 
@@ -1548,7 +1548,7 @@ def update_business_records(token, filepath, name_id_mapping_file):
 		# Add more metadata
 		data = {
 			"CoreField.Legacy-Identifier": f"BR_{record.folder_number}",
-			"CoreField.Title:": f"BR_{record.folder_number} / {record.folder_name}",
+			"CoreField.Title:": f"BR_{record.folder_number} - {record.folder_name}",
 			"CoreField.Description:": record.abstract.strip() if record.abstract else '',
 			"NYP.Archives-Folder-Title:": record.folder_name,
 			"NYP.Date-Range:": record.date_range,
