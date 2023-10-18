@@ -24,6 +24,7 @@ from dotenv import load_dotenv
 import xml.etree.ElementTree as ET
 from lxml import etree
 from fuzzywuzzy import process
+from my_logger import logger
 
 
 # First, grab credentials and other values from the .env file in the same folder as this script
@@ -34,7 +35,6 @@ login = os.environ.get('login', 'default')
 password = os.environ.get('password', 'default')
 password = quote(password) # now URL encoded
 directory = os.environ.get('directory', 'default')
-logs = os.environ.get('logs', 'default')
 baseurl = os.environ.get('baseurl', 'default')
 datatable = os.environ.get('datatable', 'default')
 carlos_xml_path = os.environ.get('carlos_xml_path', 'default')
@@ -52,6 +52,7 @@ WORK_PARENT_FOLDER_IDENTIFIER = "PH1QHU6"
 PM_PARENT_FOLDER_IDENTIFIER = "PH1N31F"
 BR_PARENT_FOLDER_IDENTIFIER = "PH1N31H"
 PAGE_IMPORT_MAPPING_TEMPLATE = "2TTUSVANGT"
+PROGRAM_SEARCH_API_URL = "https://cortex.nyphil.org/API/search/v3.0/search?query=DocSubType:Program%20Purpose:Pending%20&format=json&fields=Identifier,NYP.Program-ID,CoreField.Asset-date"
 
 # Some helper functions for data cleanup
 def xpath_text(element, path):
@@ -159,6 +160,7 @@ class Program:
 		self.dates = [date.text for date in row_element.findall('date')]
 		self.date_range = get_date_range(self.dates, '%m/%d/%Y', '%Y-%m-%d')
 		self.performance_times = [time.text for time in row_element.findall('performance_time')]
+		self.combined_datetimes = self.combine_dates_and_times()
 		self.location_names = [loc_name.text for loc_name in row_element.findall('location_name')]
 		self.venue_names = [venue_name.text for venue_name in row_element.findall('venue_name')]
 		self.event_type_names = [event_type.text for event_type in row_element.findall('event_type_names')]
@@ -209,6 +211,45 @@ class Program:
 			next_year = str(int(year) + 1)
 			season = year + '-' + next_year.zfill(2)
 		return season
+
+	def combine_dates_and_times(self):
+		# Initialize an empty list to store the combined datetime strings
+		combined_datetimes = []
+
+		# Find the longer of the two lists
+		longest_list = max(len(self.dates), len(self.performance_times))
+
+		# Iterate over the index of the longer list
+		for i in range(longest_list):
+			date = self.dates[i] if i < len(self.dates) else ""
+			time = self.performance_times[i] if i < len(self.performance_times) else ""
+
+			# Reformat the date to "YYYY-MM-dd" if date exists
+			try:
+				if date:
+					date_formatted = datetime.datetime.strptime(date, "%m/%d/%Y").strftime("%Y-%m-%d")
+				else:
+					date_formatted = ""
+			except ValueError as e:
+				logger.error(f"An error occurred while formatting the date for Program {self.id}: {e}")
+				date_formatted = ""
+			
+			# Convert the time from 12-hour to 24-hour format if time exists
+			try:
+				if time:
+					time_24hr = datetime.datetime.strptime(time, "%I:%M%p").strftime("%H:%M:%S")
+					combined_datetime = f"{date_formatted}T{time_24hr}"
+				else:
+					logger.info(f"Time data is empty for Program {self.id}")
+					combined_datetime = f"{date_formatted}"
+			except ValueError as e:
+				logger.error(f"An error occurred while formatting the time for Program {self.id}: {e}")
+				combined_datetime = f"{date_formatted}"
+
+			combined_datetimes.append(combined_datetime)
+
+		return combined_datetimes
+
 
 def load_program_data(file_path):
 	try:
@@ -326,6 +367,7 @@ def load_business_records_data(file_path, name_id_mapping_file):
 
 	return records
 
+
 # get a new token from the Login API
 def auth():
 
@@ -416,9 +458,9 @@ def make_folders(token):
 				update_parent = ''
 			else:
 				update_parent = f'&CoreField.Parent-folder:=[Documents.Virtual-folder.Season:CoreField.Legacy-identifier={season_folder_id}]'
-			
+
 			# loop through the programs
-			parameters = f"Documents.Virtual-folder.Program:CreateOrUpdate?CoreField.Legacy-Identifier={program_id}&CoreField.Title:={folder_name}&NYP.Program-ID:={program_id}&CoreField.visibility-class:=Public{update_parent}"
+			parameters = f"Documents.Virtual-folder.Program:CreateOrUpdate?CoreField.Legacy-Identifier={program_id}&CoreField.Title:={folder_name}&NYP.Program-ID:={program_id}{update_parent}"
 			call = f'{baseurl}{datatable}{parameters}&token={token}'
 			logger.info(f'Updating Program {count} of {total} -- {percent}% complete')
 			api_call(call,'Program Folder',program_id)
@@ -486,15 +528,62 @@ def update_folders(token):
 				digarch_id = ''
 				logger.error(f'Failed to get Solr data for program {ID}')
 
+			# Format the combined_datetime string for the Program Dates field
+			# Convert the pipe-separated strings to lists
+			date_list = DATE.split("|")
+			time_list = PERFORMANCE_TIME.split("|")
+
+			# Initialize an empty list to store the combined datetimes
+			combined_datetimes = []
+
+			# If the lengths of the date and time lists don't match, set a flag
+			lengths_match = len(date_list) == len(time_list)
+
+			for i, date in enumerate(date_list):
+				try:
+					# Reformat the date to "YYYY-MM-dd"
+					date_formatted = datetime.datetime.strptime(date, "%m/%d/%Y").strftime("%Y-%m-%d")
+				except ValueError as e:
+					logger.error(f"An error occurred while formatting the date for Program {ID}: {e}")
+					continue  # Skip to the next iteration
+
+				# If the lengths match and there's a corresponding time, convert it to 24-hour format
+				if lengths_match:
+					time = time_list[i]
+					try:
+						if time:  # Check if time is not empty or None
+							time_24hr = datetime.datetime.strptime(time, "%I:%M%p").strftime("%H:%M:%S")
+							combined_datetime = f"{date_formatted}T{time_24hr}"
+						else:
+							logger.info("Time data is empty.")
+							combined_datetime = f"{date_formatted}"
+					except ValueError as e:
+						logger.error(f"An error occurred while formatting the time for Program {ID}: {e}")
+						combined_datetime = f"{date_formatted}"
+				else:
+					combined_datetime = f"{date_formatted}"
+
+				# Append the combined datetime to the list
+				combined_datetimes.append(combined_datetime)
+
+			# Convert the list back to a pipe-separated string
+			combined_datetimes_str = "|".join(combined_datetimes)
+
+			# set the visibility based on whether the event is past or future
+			if datetime.datetime.strptime(DATE.split('|')[0], '%m/%d/%Y').date() < datetime.datetime.now().date():
+				visibility = "Public"
+			else:
+				visibility = "Pending"
+
 			# Create the dict
 			data = {
 				'CoreField.Legacy-Identifier': ID,
 				'NYP.Season+': SEASON,
 				'NYP.Week+:': WEEK,
 				'NYP.Orchestra+:': ORCHESTRA_NAME,
-				'NYP.Program-Date(s)++': DATE,
+				'CoreField.Asset-date:': DATE.split('|')[0],
+				'NYP.Program-Dates+': combined_datetimes_str,
 				'NYP.Program-Date-Range:': DATE_RANGE,
-				'NYP.Program-Times++': PERFORMANCE_TIME,
 				'NYP.Location++': LOCATION_NAME,
 				'NYP.Venue++': VENUE_NAME,
 				'NYP.Event-Type++': SUB_EVENT_NAMES,
@@ -502,6 +591,7 @@ def update_folders(token):
 				'NYP.Composer/Work-Full-Title:': COMPOSER_TITLE,
 				'NYP.Notes-on-program:': NOTES_XML,
 				'NYP.Digital-Archives-ID:': digarch_id,
+				'CoreField.Visibility-class:' : visibility
 			}
 			# fix for linebreaks and such - dump to string and load back to JSON
 			data = json.dumps(data)
@@ -512,7 +602,7 @@ def update_folders(token):
 			logger.info(f'Updating Program {count} of {total} = {percent}% complete')
 
 			# clear values from program folders
-			parameters = f"Documents.Virtual-folder.Program:Update?CoreField.Legacy-Identifier={ID}&NYP.Season--=&NYP.Program-Date(s)--=&NYP.Program-Times--=&NYP.Location--=&NYP.Venue--=&NYP.Event-Type--=&NYP.Composer/Work--=&NYP.Soloist--=&NYP.Conductor--=&NYP.Composer--=&NYP.Related-Programs--="
+			parameters = f"Documents.Virtual-folder.Program:Update?CoreField.Legacy-Identifier={ID}&NYP.Season--=&NYP.Program-Dates--=&NYP.Location--=&NYP.Venue--=&NYP.Event-Type--=&NYP.Composer/Work--=&NYP.Soloist--=&NYP.Conductor--=&NYP.Composer--=&NYP.Related-Programs--="
 			call = baseurl + datatable + parameters + '&token=' + token
 			api_call(call,'Program - clear old metadata',ID)
 			
@@ -737,7 +827,7 @@ def program_works(programs, token):
 				f"&CoreField.Parent-folder:=[Documents.Virtual-folder.Program:CoreField.Legacy-identifier={program.id}]"
 				f"&NYP.Program-ID:={program.id}"
 				f"&NYP.Composer/Work--=&NYP.Conductor--=&NYP.Composer--=&NYP.Soloist--="
-				f"&NYP.Season--=&NYP.Program-Date(s)--=&NYP.Program-Times--=&NYP.Location--=&NYP.Venue--=&NYP.Event-Type--="
+				f"&NYP.Season--=&NYP.Program-Dates--=&NYP.Location--=&NYP.Venue--=&NYP.Event-Type--="
 				f"&CoreField.visibility-class:={visibility}"
 			)
 			url = f"{baseurl}{datatable}{parameters}&token={token}"
@@ -811,9 +901,8 @@ def program_works(programs, token):
 				f"&NYP.Encore:={encore}"
 				f"&NYP.Season+={program.season}"
 				f"&NYP.Orchestra:={program.orchestra_name}"
-				f"&NYP.Program-Date(s)++={'|'.join(program.dates)}"
+				f"&NYP.Program-Dates+={'|'.join(program.combined_datetimes)}"
 				f"&NYP.Program-Date-Range:={program.date_range}"
-				f"&NYP.Program-Times++={'|'.join(time for time in program.performance_times if time is not None)}"
 				f"&NYP.Location++={'|'.join(program.location_names)}"
 				f"&NYP.Venue++={'|'.join(program.venue_names)}"
 				f"&NYP.Event-Type++={'|'.join(program.sub_event_names)}"
@@ -886,7 +975,7 @@ def program_works(programs, token):
 	logger.info("All done with Program Works")
 
 
-# Let's update Scores and Parts
+# Update Scores and Parts
 def library_updates(token):
 
 	logger.info("Starting Printed Music updates...")
@@ -1501,6 +1590,59 @@ def update_business_records(token, filepath, name_id_mapping_file):
 	logger.info("Finished updating Business Records")
 
 
+# update the visibility of Programs if they are in the past
+def update_program_visibility(token):
+	# Append the token to the search API URL
+	search_api_url_with_token = f"{PROGRAM_SEARCH_API_URL}&token={token}"
+
+	# Make the API request to get the Programs
+	response = requests.get(search_api_url_with_token)
+	
+	if response.status_code == 200:
+		json_data = response.json()
+		today_date = datetime.now().date()
+
+		programs_to_update = 0
+
+		for item in json_data['APIResponse']['Items']:
+			# Ignore items without a Program-ID
+			if not item.get('NYP.Program-ID'):
+				continue
+
+			asset_date_str = item.get('CoreField.Asset-date', '')
+
+			if not asset_date_str:
+				continue
+
+			asset_date_obj = datetime.strptime(asset_date_str, "%m/%d/%Y")
+
+			if asset_date_obj.date() <= today_date:
+				# Count the number of programs to update
+				programs_to_update += 1
+
+				# Log updating visibility
+				logger.info(f"Updating visibility for Program-ID {item['NYP.Program-ID']} to Public")
+				
+				# Construct the API URL for updating the visibility
+				update_url = f"https://cortex.nyphil.org/API/DataTable/v2.2/Documents.Virtual-folder.Program:Update?CoreField.Identifier={item['Identifier']}&CoreField.Visibility-class:=Public&token={token}"
+				
+				# Make the API request to update the visibility
+				update_response = requests.post(update_url)
+
+				if update_response.status_code == 200:
+					logger.info(f"Successfully updated visibility for Program-ID {item['NYP.Program-ID']}")
+				else:
+					logger.error(f"Failed to update visibility for Program-ID {item['NYP.Program-ID']}. HTTP Status Code: {update_response.status_code}")
+
+		# Log if there are no programs to update
+		if programs_to_update == 0:
+			logger.info("No programs to update.")
+
+	else:
+		logger.error(f"Failed to fetch data. HTTP Status Code: {response.status_code}")
+
+
+# set up our api call structure
 def api_call(url, asset_type, ID, params=None, data=None):
 	# Initialize response to None
 	response = None
@@ -1548,63 +1690,35 @@ def api_call(url, asset_type, ID, params=None, data=None):
 	return response
 
 
-############################
-## update Cortex metadata ##
-############################
+def main():
+	# Starting the run
+	logger.info('=======================')
+	logger.info('Script started...')
 
-# Find the previous log file and rename it
-filepath = logs + 'cortex-updates.log'
+	# Run the auth function to get a token
+	token = auth()
 
-if os.path.exists(filepath):
-	# Get the date modified value of the previous log file and format as string
-	# Borrowed from here: https://www.geeksforgeeks.org/how-to-get-file-creation-and-modification-date-or-time-in-python/
-	mod_time = os.path.getmtime(filepath) 
-	mod_timestamp = time.ctime(mod_time)
-	time_obj = time.strptime(mod_timestamp)
-	time_string = time.strftime("%Y-%m-%d-%H-%M", time_obj)
-	new_filepath = logs + time_string + '_cortex-updates.log'
-	# Rename the last log file
-	os.rename(filepath, new_filepath)
+	if token and token != '':
+		logger.info(f'We have a token: {token} Proceeding...')
+		print(f'Your token is: {token}')
 
-# Set up logging (found here: https://fangpenlin.com/posts/2012/08/26/good-logging-practice-in-python/)
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
+		programs = load_program_data(program_xml) # right now we only need to load this data for the program_works function, but we'll eventually update the other functions to use Program objects, so we'll keep this function separate
 
-# create a file handler
-logfile = logs + 'cortex-updates.log'
-handler = logging.FileHandler(logfile)
-handler.setLevel(logging.INFO)
+		make_folders(token)
+		update_folders(token)
+		create_sources(token)
+		add_sources_to_program(token)
+		update_program_visibility(token)
+		library_updates(token)
+		# program_works(programs, token)
+		concert_programs(programs, token)
+		update_business_records(token, business_records_xml, name_id_mapping_file)
 
-# create a logging format
-formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-handler.setFormatter(formatter)
+		logger.info('ALL DONE! Bye bye :)')
 
-# add the handlers to the logger
-logger.addHandler(handler)
+	else:
+		logger.info('No API token :( Goodbye')
 
-# Starting the run
-logger.info('=======================')
-logger.info('Script started...')
 
-# Run the auth function to get a token
-token = auth()
-
-if token and token != '':
-	logger.info(f'We have a token: {token} Proceeding...')
-	print(f'Your token is: {token}')
-
-	programs = load_program_data(program_xml) # right now we only need to load this data for the program_works function, but we'll eventually update the other functions to use Program objects, so we'll keep this function separate
-
-	make_folders(token)
-	update_folders(token)
-	create_sources(token)
-	add_sources_to_program(token)
-	library_updates(token)
-	# program_works(programs, token)
-	concert_programs(programs, token)
-	update_business_records(token, business_records_xml, name_id_mapping_file)
-
-	logger.info('ALL DONE! Bye bye :)')
-
-else:
-	logger.info('No API token :( Goodbye')
+if __name__ == "__main__":
+	main()
