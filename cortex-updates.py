@@ -581,8 +581,10 @@ def update_folders(token):
 				'NYP.Season+': SEASON,
 				'NYP.Week+:': WEEK,
 				'NYP.Orchestra+:': ORCHESTRA_NAME,
-				'CoreField.Asset-date:': DATE.split('|')[0],
+				'CoreField.Asset-date:': combined_datetimes[0],
 				'NYP.Program-Dates+': combined_datetimes_str,
+				'NYP.Program-Date(s)++': DATE,
+				'NYP.Program-Times++': PERFORMANCE_TIME,
 				'NYP.Program-Date-Range:': DATE_RANGE,
 				'NYP.Location++': LOCATION_NAME,
 				'NYP.Venue++': VENUE_NAME,
@@ -602,7 +604,7 @@ def update_folders(token):
 			logger.info(f'Updating Program {count} of {total} = {percent}% complete')
 
 			# clear values from program folders
-			parameters = f"Documents.Virtual-folder.Program:Update?CoreField.Legacy-Identifier={ID}&NYP.Season--=&NYP.Program-Dates--=&NYP.Location--=&NYP.Venue--=&NYP.Event-Type--=&NYP.Composer/Work--=&NYP.Soloist--=&NYP.Conductor--=&NYP.Composer--=&NYP.Related-Programs--="
+			parameters = f"Documents.Virtual-folder.Program:Update?CoreField.Legacy-Identifier={ID}&NYP.Season--=&NYP.Program-Dates--=&NYP.Program-Date(s)--=&NYP.Program-Times--=&NYP.Location--=&NYP.Venue--=&NYP.Event-Type--=&NYP.Composer/Work--=&NYP.Soloist--=&NYP.Conductor--=&NYP.Composer--=&NYP.Related-Programs--="
 			call = baseurl + datatable + parameters + '&token=' + token
 			api_call(call,'Program - clear old metadata',ID)
 			
@@ -827,7 +829,7 @@ def program_works(programs, token):
 				f"&CoreField.Parent-folder:=[Documents.Virtual-folder.Program:CoreField.Legacy-identifier={program.id}]"
 				f"&NYP.Program-ID:={program.id}"
 				f"&NYP.Composer/Work--=&NYP.Conductor--=&NYP.Composer--=&NYP.Soloist--="
-				f"&NYP.Season--=&NYP.Program-Dates--=&NYP.Location--=&NYP.Venue--=&NYP.Event-Type--="
+				f"&NYP.Season--=&NYP.Program-Dates--=&NYP.Program-Date(s)--=&NYP.Program-Times&NYP.Location--=&NYP.Venue--=&NYP.Event-Type--="
 				f"&CoreField.visibility-class:={visibility}"
 			)
 			url = f"{baseurl}{datatable}{parameters}&token={token}"
@@ -902,7 +904,9 @@ def program_works(programs, token):
 				f"&NYP.Season+={program.season}"
 				f"&NYP.Orchestra:={program.orchestra_name}"
 				f"&NYP.Program-Dates+={'|'.join(program.combined_datetimes)}"
+				f"&NYP.Program-Date(s)++={'|'.join(program.dates)}"
 				f"&NYP.Program-Date-Range:={program.date_range}"
+				f"&NYP.Program-Times++={'|'.join(time for time in program.performance_times if time is not None)}"
 				f"&NYP.Location++={'|'.join(program.location_names)}"
 				f"&NYP.Venue++={'|'.join(program.venue_names)}"
 				f"&NYP.Event-Type++={'|'.join(program.sub_event_names)}"
