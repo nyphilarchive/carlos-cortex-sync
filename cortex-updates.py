@@ -129,7 +129,7 @@ def get_date_range(dates, input_format, output_format):
 	except ValueError as e:
 		logger.error(f"Could not get the date range. Error: {e}")
 		return ""
-
+	
 
 # Set up our Program classes
 class ProgramWork:
@@ -322,20 +322,20 @@ class BusinessRecord:
 		self.name_id_mapping = name_id_mapping
 
 	def get_id_for_name(self, name):
-	    if name in self.name_id_mapping:
-	        logger.info(f"Exact match found: {name} -> {self.name_id_mapping[name]}")
-	        return self.name_id_mapping[name]
+		if name in self.name_id_mapping:
+			logger.info(f"Exact match found: {name} -> {self.name_id_mapping[name]}")
+			return self.name_id_mapping[name]
 
-	    # Perform fuzzy matching if exact match not found
-	    best_match, score = process.extractOne(name, self.name_id_mapping.keys())
-	    
-	    # Set a threshold for how "fuzzy" we want our matches to be
-	    if score >= 90:
-	        logger.warning(f"Fuzzy match found: {name} -> {best_match} with score {score}")
-	        return self.name_id_mapping[best_match]
+		# Perform fuzzy matching if exact match not found
+		best_match, score = process.extractOne(name, self.name_id_mapping.keys())
+		
+		# Set a threshold for how "fuzzy" we want our matches to be
+		if score >= 90:
+			logger.warning(f"Fuzzy match found: {name} -> {best_match} with score {score}")
+			return self.name_id_mapping[best_match]
 
-	    logger.error(f"No satisfactory match found for {name}. Best match was {best_match} with score {score}")
-	    return None
+		logger.error(f"No satisfactory match found for {name}. Best match was {best_match} with score {score}")
+		return None
 
 
 # Load Business Record data from the source XML
@@ -589,7 +589,7 @@ def update_folders(token):
 				'NYP.Location++': LOCATION_NAME,
 				'NYP.Venue++': VENUE_NAME,
 				'NYP.Event-Type++': SUB_EVENT_NAMES,
-				'NYP.Composer/Work++': COMPOSER_TITLE_SHORT,
+				# 'NYP.Composer/Work++': COMPOSER_TITLE_SHORT,
 				'NYP.Composer/Work-Full-Title:': COMPOSER_TITLE,
 				'NYP.Notes-on-program:': NOTES_XML,
 				'NYP.Digital-Archives-ID:': digarch_id,
@@ -604,7 +604,7 @@ def update_folders(token):
 			logger.info(f'Updating Program {count} of {total} = {percent}% complete')
 
 			# clear values from program folders
-			parameters = f"Documents.Virtual-folder.Program:Update?CoreField.Legacy-Identifier={ID}&NYP.Season--=&NYP.Program-Dates--=&NYP.Program-Date(s)--=&NYP.Program-Times--=&NYP.Location--=&NYP.Venue--=&NYP.Event-Type--=&NYP.Composer/Work--=&NYP.Soloist--=&NYP.Conductor--=&NYP.Composer--=&NYP.Related-Programs--="
+			parameters = f"Documents.Virtual-folder.Program:Update?CoreField.Legacy-Identifier={ID}&NYP.Season--=&NYP.Program-Dates--=&NYP.Program-Date(s)--=&NYP.Program-Times--=&NYP.Location--=&NYP.Venue--=&NYP.Event-Type--=&NYP.Composer/Work--=&NYP.Composer-/-Work--=&NYP.Soloist--=&NYP.Conductor--=&NYP.Composer--=&NYP.Related-Programs--="
 			call = baseurl + datatable + parameters + '&token=' + token
 			api_call(call,'Program - clear old metadata',ID)
 			
@@ -779,6 +779,49 @@ def add_sources_to_program(token):
 			api_call(call,f'Add composer {Composer_ID} to Program',Program_ID)
 	file.close()
 
+def create_or_update_works(programs, token):
+	logger.info("Starting creation/update of Works...")
+
+	work_status = {}
+
+	for program in programs:
+		for work in program.program_works:
+			# Check if the work already exists in Cortex
+			if work.works_id not in work_status:
+				# Determine if the work exists
+				parameters = f'CoreField.Legacy-Identifier:WORK_{work.works_id} DocSubType:Work&format=json'
+				query = f'{baseurl}/API/search/v3.0/search?query={parameters}&token={token}'
+				try:
+					response = requests.get(query)
+					response_data = response.json()
+					exists = response_data['APIResponse']['GlobalInfo']['TotalCount'] > 0
+					work_status[work.works_id] = exists
+					if exists:
+						logger.info(f'Work {work.works_id} exists in Cortex.')
+					else:
+						logger.info(f'Work {work.works_id} does not exist in Cortex, creating/updating...')
+				except Exception as e:
+					logger.error(f'Error checking existence of Work {work.works_id}: {e}')
+					continue
+
+			# Create or update the work in Cortex based on the existence check
+			if not work_status[work.works_id]:
+				title = f"{work.composer_name} / {replace_chars(work.title_short)}"
+				title = title[:200] if title.endswith(', / .') else title[:-5]
+
+				parameters = (
+					f"Documents.Virtual-folder.Work:CreateOrUpdate"
+					f"?CoreField.Legacy-Identifier=WORK_{work.works_id}"
+					f"&NYP.Works-ID:={work.works_id}"
+					f"&CoreField.Title:={title}"
+					f"&NYP.Work-Title-Full:={replace_chars(work.title_full)}"
+					f"&NYP.Work-Title-Short:={replace_chars(work.title_short)}"
+				)
+				url = f"{baseurl}{datatable}{parameters}&token={token}"
+				api_call(url, 'Create/Update Work', work.works_id)
+
+	logger.info("Finished creation/update of Works.")
+
 
 # Go through each Program object and create/update the Works within each program virtual folder
 def program_works(programs, token):
@@ -835,51 +878,7 @@ def program_works(programs, token):
 			url = f"{baseurl}{datatable}{parameters}&token={token}"
 			api_call(url,'Establish Program Work',work.program_works_id)
 
-			# if the work already exists in Cortex, we won't update the parent folder
-			# Check if the work has already been checked
-			if work.works_id in work_status:
-			    exists = work_status[work.works_id]
-			    logger.info(f'Work {work.works_id} status found in local cache: {"exists" if exists else "does not exist"}')
-			else:
-			    parameters = f'CoreField.Legacy-Identifier:WORK_{work.works_id} DocSubType:Work&format=json'
-			    query = f'{baseurl}/API/search/v3.0/search?query={parameters}&token={token}'
-			    try:
-			        r = requests.get(query)
-			        r_data = r.json()
-
-			        if r_data['APIResponse']['GlobalInfo']['TotalCount'] == 1:
-			            exists = True
-			            logger.info('Work exists in Cortex')
-			        else:
-			            exists = False
-			            logger.info('This looks like a new work so let\'s add it to Cortex')
-			            
-			        # Store this work's existence status in the dictionary
-			        work_status[work.works_id] = exists
-
-			    except Exception as e:
-			        exists = False
-			        logger.warning(f'Unable to find Program ID {program_id}. Exception: {e}')
-
-			# Check if we should assign a parent
-			assign_parent = ''
-			if not exists:
-			    assign_parent = f'&CoreField.Parent-folder:=[Documents.All:CoreField.Identifier={WORK_PARENT_FOLDER_IDENTIFIER}]'
-
-			# create/update the work in Cortex
-			parameters = (
-				f"Documents.Virtual-folder.Work:CreateOrUpdate"
-				f"?CoreField.Legacy-Identifier=WORK_{work.works_id}"
-				f"&NYP.Works-ID:={work.works_id}"
-				f"&CoreField.Title:={work.composer_name} / {replace_chars(work.title_short)}"
-				f"{assign_parent}"
-				f"&NYP.Work-Title-Full:={replace_chars(work.title_full)}"
-				f"&NYP.Work-Title-Short:={replace_chars(work.title_short)}"
-			)
-			url = f"{baseurl}{datatable}{parameters}&token={token}"
-			api_call(url,'Update the Work',work.works_id)
-
-			# link work to program work
+			# link Work to Program Work
 			parameters = (
 				f"Documents.Virtual-Folder.Program-work:Update"
 				f"?CoreField.Legacy-Identifier={work.program_works_id}"
@@ -887,6 +886,15 @@ def program_works(programs, token):
 			)
 			url = f"{baseurl}{datatable}{parameters}&token={token}"
 			api_call(url,f'Link Work {work.works_id} to Program Work',work.program_works_id)
+
+			# link Work to parent Program
+			parameters = (
+				f"Documents.Virtual-Folder.Program:Update"
+				f"?CoreField.Legacy-Identifier={program.id}"
+				f"&NYP.Composer-/-Work+=[Documents.Virtual-folder.Work:CoreField.Legacy-identifier=WORK_{work.works_id}]"
+			)
+			url = f"{baseurl}{datatable}{parameters}&token={token}"
+			api_call(url,f'Link Work {work.works_id} to Program',program.id)
 
 			# add metadata to each program work
 			if work.works_encore == 'Y':
@@ -1713,10 +1721,11 @@ def main():
 		create_sources(token)
 		add_sources_to_program(token)
 		update_program_visibility(token)
-		library_updates(token)
-		# program_works(programs, token)
-		concert_programs(programs, token)
-		update_business_records(token, business_records_xml, name_id_mapping_file)
+		# library_updates(token)
+		create_or_update_works(programs, token)
+		program_works(programs, token)
+		# concert_programs(programs, token)
+		# update_business_records(token, business_records_xml, name_id_mapping_file)
 
 		logger.info('ALL DONE! Bye bye :)')
 
