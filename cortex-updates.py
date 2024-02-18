@@ -1716,9 +1716,9 @@ def main():
 
 		programs = load_program_data(program_xml) # right now we only need to load this data for the program_works function, but we'll eventually update the other functions to use Program objects, so we'll keep this function separate
 
-		make_folders(token)
-		update_folders(token)
-		create_sources(token)
+		# make_folders(token)
+		# update_folders(token)
+		# create_sources(token)
 		add_sources_to_program(token)
 		update_program_visibility(token)
 		# library_updates(token)
