@@ -888,6 +888,8 @@ def program_works(programs, token):
 				f"&CoreField.visibility-class:={visibility}"
 			)
 			url = f"{baseurl}{datatable}{parameters}&token={token}"
+			# debug
+			print(url)
 			api_call(url,'Establish Program Work',work.program_works_id)
 
 			# link Work to Program Work
@@ -897,6 +899,8 @@ def program_works(programs, token):
 				f"&NYP.Composer-/-Work+=[Documents.Virtual-folder.Work:CoreField.Legacy-identifier=WORK_{work.works_id}]"
 			)
 			url = f"{baseurl}{datatable}{parameters}&token={token}"
+			# debug
+			print(url)
 			api_call(url,f'Link Work {work.works_id} to Program Work',work.program_works_id)
 
 			# link Work to parent Program
@@ -906,6 +910,8 @@ def program_works(programs, token):
 				f"&NYP.Composer-/-Work+=[Documents.Virtual-folder.Work:CoreField.Legacy-identifier=WORK_{work.works_id}]"
 			)
 			url = f"{baseurl}{datatable}{parameters}&token={token}"
+			#debug
+			print(url)
 			api_call(url,f'Link Work {work.works_id} to Program',program.id)
 
 			# add metadata to each program work
@@ -1728,13 +1734,13 @@ def main():
 
 		programs = load_program_data(program_xml) # right now we only need to load this data for the program_works function, but we'll eventually update the other functions to use Program objects, so we'll keep this function separate
 
-		make_folders(token)
-		update_folders(token)
-		create_sources(token)
-		add_sources_to_program(token)
-		update_program_visibility(token)
-		library_updates(token)
-		create_or_update_works(programs, token)
+		# make_folders(token)
+		# update_folders(token)
+		# create_sources(token)
+		# add_sources_to_program(token)
+		# update_program_visibility(token)
+		# library_updates(token)
+		# create_or_update_works(programs, token)
 		program_works(programs, token)
 		concert_programs(programs, token)
 		update_business_records(token, business_records_xml, name_id_mapping_file)
