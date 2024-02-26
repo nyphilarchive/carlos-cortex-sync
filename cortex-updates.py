@@ -1741,13 +1741,13 @@ def main():
 
 		programs = load_program_data(program_xml) # right now we only need to load this data for the program_works function, but we'll eventually update the other functions to use Program objects, so we'll keep this function separate
 
-		# make_folders(token)
-		# update_folders(token)
-		# create_sources(token)
-		# add_sources_to_program(token)
-		# update_program_visibility(token)
-		# library_updates(token)
-		# create_or_update_works(programs, token)
+		make_folders(token)
+		update_folders(token)
+		create_sources(token)
+		add_sources_to_program(token)
+		update_program_visibility(token)
+		library_updates(token)
+		create_or_update_works(programs, token)
 		program_works(programs, token)
 		concert_programs(programs, token)
 		update_business_records(token, business_records_xml, name_id_mapping_file)
