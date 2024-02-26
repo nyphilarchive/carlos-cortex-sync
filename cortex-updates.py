@@ -129,6 +129,14 @@ def get_date_range(dates, input_format, output_format):
 	except ValueError as e:
 		logger.error(f"Could not get the date range. Error: {e}")
 		return ""
+
+def sanitize_data(data):
+	if data is None:
+		return []  # Return an empty list for None to safely join later
+	elif isinstance(data, list):
+		return [str(item) for item in data if item is not None]  # Convert items to strings, ignore None
+	else:
+		return [str(data)]  # Wrap non-list data in a list as string
 	
 
 # Set up our Program classes
@@ -791,33 +799,33 @@ def create_or_update_works(programs, token):
 			# if the work already exists in Cortex, we won't update the parent folder
 			# Check if the work has already been checked
 			if work.works_id in work_status:
-			    exists = work_status[work.works_id]
-			    logger.info(f'Work {work.works_id} status found in local cache: {"exists" if exists else "does not exist"}')
+				exists = work_status[work.works_id]
+				logger.info(f'Work {work.works_id} status found in local cache: {"exists" if exists else "does not exist"}')
 			else:
-			    parameters = f'CoreField.Legacy-Identifier:WORK_{work.works_id} DocSubType:Work&format=json'
-			    query = f'{baseurl}/API/search/v3.0/search?query={parameters}&token={token}'
-			    try:
-			        r = requests.get(query)
-			        r_data = r.json()
+				parameters = f'CoreField.Legacy-Identifier:WORK_{work.works_id} DocSubType:Work&format=json'
+				query = f'{baseurl}/API/search/v3.0/search?query={parameters}&token={token}'
+				try:
+					r = requests.get(query)
+					r_data = r.json()
 
-			        if r_data['APIResponse']['GlobalInfo']['TotalCount'] == 1:
-			            exists = True
-			            logger.info('Work exists in Cortex')
-			        else:
-			            exists = False
-			            logger.info('This looks like a new work so let\'s add it to Cortex')
-			            
-			        # Store this work's existence status in the dictionary
-			        work_status[work.works_id] = exists
+					if r_data['APIResponse']['GlobalInfo']['TotalCount'] == 1:
+						exists = True
+						logger.info('Work exists in Cortex')
+					else:
+						exists = False
+						logger.info('This looks like a new work so let\'s add it to Cortex')
+						
+					# Store this work's existence status in the dictionary
+					work_status[work.works_id] = exists
 
-			    except Exception as e:
-			        exists = False
-			        logger.warning(f'Unable to find Program ID {program_id}. Exception: {e}')
+				except Exception as e:
+					exists = False
+					logger.warning(f'Unable to find Program ID {program_id}. Exception: {e}')
 
 			# Check if we should assign a parent
 			assign_parent = ''
 			if not exists:
-			    assign_parent = f'&CoreField.Parent-folder:=[Documents.All:CoreField.Identifier={WORK_PARENT_FOLDER_IDENTIFIER}]'
+				assign_parent = f'&CoreField.Parent-folder:=[Documents.All:CoreField.Identifier={WORK_PARENT_FOLDER_IDENTIFIER}]'
 
 			# create/update the work in Cortex
 			parameters = (
@@ -888,8 +896,6 @@ def program_works(programs, token):
 				f"&CoreField.visibility-class:={visibility}"
 			)
 			url = f"{baseurl}{datatable}{parameters}&token={token}"
-			# debug
-			print(url)
 			api_call(url,'Establish Program Work',work.program_works_id)
 
 			# link Work to Program Work
@@ -899,8 +905,6 @@ def program_works(programs, token):
 				f"&NYP.Composer-/-Work+=[Documents.Virtual-folder.Work:CoreField.Legacy-identifier=WORK_{work.works_id}]"
 			)
 			url = f"{baseurl}{datatable}{parameters}&token={token}"
-			# debug
-			print(url)
 			api_call(url,f'Link Work {work.works_id} to Program Work',work.program_works_id)
 
 			# link Work to parent Program
@@ -910,15 +914,18 @@ def program_works(programs, token):
 				f"&NYP.Composer-/-Work+=[Documents.Virtual-folder.Work:CoreField.Legacy-identifier=WORK_{work.works_id}]"
 			)
 			url = f"{baseurl}{datatable}{parameters}&token={token}"
-			#debug
-			print(url)
 			api_call(url,f'Link Work {work.works_id} to Program',program.id)
 
 			# add metadata to each program work
+
+			# Encores
 			if work.works_encore == 'Y':
 				encore = 'Yes'
 			else:
 				encore = ''
+
+			# Fix for potentially missing venus
+			sanitized_venue_names = sanitize_data(program.venue_names)
 
 			parameters = (
 				f"Documents.Virtual-Folder.Program-work:Update"
@@ -934,7 +941,7 @@ def program_works(programs, token):
 				f"&NYP.Program-Date-Range:={program.date_range}"
 				f"&NYP.Program-Times++={'|'.join(time for time in program.performance_times if time is not None)}"
 				f"&NYP.Location++={'|'.join(program.location_names)}"
-				f"&NYP.Venue++={'|'.join(program.venue_names)}"
+				f"&NYP.Venue++={'|'.join(sanitized_venue_names)}"
 				f"&NYP.Event-Type++={'|'.join(program.sub_event_names)}"
 			)
 			url = f"{baseurl}{datatable}{parameters}&token={token}"
