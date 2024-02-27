@@ -938,8 +938,9 @@ def program_works(programs, token):
 			else:
 				encore = ''
 
-			# Fix for potentially missing venus
+			# Fix for potentially missing venues and locations
 			sanitized_venue_names = sanitize_data(program.venue_names)
+			sanitized_locations = sanitize_data(program.location_names)
 
 			parameters = (
 				f"Documents.Virtual-Folder.Program-work:Update"
@@ -954,7 +955,7 @@ def program_works(programs, token):
 				f"&NYP.Program-Date(s)++={'|'.join(program.dates)}"
 				f"&NYP.Program-Date-Range:={program.date_range}"
 				f"&NYP.Program-Times++={'|'.join(time for time in program.performance_times if time is not None)}"
-				f"&NYP.Location++={'|'.join(program.location_names)}"
+				f"&NYP.Location++={'|'.join(sanitized_locations)}"
 				f"&NYP.Venue++={'|'.join(sanitized_venue_names)}"
 				f"&NYP.Event-Type++={'|'.join(program.sub_event_names)}"
 			)
