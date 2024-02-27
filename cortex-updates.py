@@ -787,60 +787,74 @@ def add_sources_to_program(token):
 			api_call(call,f'Add composer {Composer_ID} to Program',Program_ID)
 	file.close()
 
+
 def create_or_update_works(programs, token):
-	logger.info("Starting creation/update of Works...")
+    logger.info("Starting creation/update of Works...")
 
-	# Initialize the dictionary to store existing works and their status
-	work_status = {}
+    # Enhanced to store both existence and update status
+    work_status = {}  # Example format: {works_id: {'exists': True, 'updated': False}}
 
-	for program in programs:
-		for work in program.program_works:
-			# Check if the work already exists in Cortex
-			# if the work already exists in Cortex, we won't update the parent folder
-			# Check if the work has already been checked
-			if work.works_id in work_status:
-				exists = work_status[work.works_id]
-				logger.info(f'Work {work.works_id} status found in local cache: {"exists" if exists else "does not exist"}')
-			else:
-				parameters = f'CoreField.Legacy-Identifier:WORK_{work.works_id} DocSubType:Work&format=json'
-				query = f'{baseurl}/API/search/v3.0/search?query={parameters}&token={token}'
-				try:
-					r = requests.get(query)
-					r_data = r.json()
+    for program in programs:
+        for work in program.program_works:
+            # Initialize update_needed as False
+            update_needed = False
 
-					if r_data['APIResponse']['GlobalInfo']['TotalCount'] == 1:
-						exists = True
-						logger.info('Work exists in Cortex')
-					else:
-						exists = False
-						logger.info('This looks like a new work so let\'s add it to Cortex')
-						
-					# Store this work's existence status in the dictionary
-					work_status[work.works_id] = exists
+            # Check if the work already exists and has been updated
+            if work.works_id in work_status:
+                exists = work_status[work.works_id]['exists']
+                updated = work_status[work.works_id]['updated']
+                logger.info(f'Work {work.works_id} status found in local cache: {"exists" if exists else "does not exist"}, {"updated" if updated else "not updated"}')
+                if not updated:  # Only proceed if the work has not been updated already
+                    update_needed = True
+            else:
+                # Assume work needs to be checked (and potentially updated)
+                update_needed = True
 
-				except Exception as e:
-					exists = False
-					logger.warning(f'Unable to find Program ID {program_id}. Exception: {e}')
+            if update_needed:
+                parameters = f'CoreField.Legacy-Identifier:WORK_{work.works_id} DocSubType:Work&format=json'
+                query = f'{baseurl}/API/search/v3.0/search?query={parameters}&token={token}'
+                try:
+                    r = requests.get(query)
+                    r_data = r.json()
 
-			# Check if we should assign a parent
-			assign_parent = ''
-			if not exists:
-				assign_parent = f'&CoreField.Parent-folder:=[Documents.All:CoreField.Identifier={WORK_PARENT_FOLDER_IDENTIFIER}]'
+                    if r_data['APIResponse']['GlobalInfo']['TotalCount'] == 1:
+                        exists = True
+                        logger.info('Work exists in Cortex')
+                    else:
+                        exists = False
+                        logger.info('This looks like a new work so let\'s add it to Cortex')
+                        
+                    # Update the work_status dictionary with existence and updated status
+                    work_status[work.works_id] = {'exists': exists, 'updated': False}
 
-			# create/update the work in Cortex
-			parameters = (
-				f"Documents.Virtual-folder.Work:CreateOrUpdate"
-				f"?CoreField.Legacy-Identifier=WORK_{work.works_id}"
-				f"&NYP.Works-ID:={work.works_id}"
-				f"&CoreField.Title:={work.composer_name} / {replace_chars(work.title_short)}"
-				f"{assign_parent}"
-				f"&NYP.Work-Title-Full:={replace_chars(work.title_full)}"
-				f"&NYP.Work-Title-Short:={replace_chars(work.title_short)}"
-			)
-			url = f"{baseurl}{datatable}{parameters}&token={token}"
-			api_call(url,'Update the Work',work.works_id)
+                except Exception as e:
+                    logger.warning(f'Unable to find Program ID {program.program_id}. Exception: {e}')
+                    # Assume work does not exist and hasn't been updated
+                    work_status[work.works_id] = {'exists': False, 'updated': False}
+                    exists = False
 
-	logger.info("Finished creation/update of Works.")
+            # Check if we should assign a parent folder
+            assign_parent = ''
+            if not exists or not work_status[work.works_id]['updated']:
+                assign_parent = f'&CoreField.Parent-folder:=[Documents.All:CoreField.Identifier={WORK_PARENT_FOLDER_IDENTIFIER}]'
+
+                # Create or update the work in Cortex
+                parameters = (
+                    f"Documents.Virtual-folder.Work:CreateOrUpdate"
+                    f"?CoreField.Legacy-Identifier=WORK_{work.works_id}"
+                    f"&NYP.Works-ID:={work.works_id}"
+                    f"&CoreField.Title:={work.composer_name} / {replace_chars(work.title_short)}"
+                    f"{assign_parent}"
+                    f"&NYP.Work-Title-Full:={replace_chars(work.title_full)}"
+                    f"&NYP.Work-Title-Short:={replace_chars(work.title_short)}"
+                )
+                url = f"{baseurl}{datatable}{parameters}&token={token}"
+                api_call(url,'Update the Work',work.works_id)
+
+                # Mark the work as updated to avoid redundant updates
+                work_status[work.works_id]['updated'] = True
+
+    logger.info("Finished creation/update of Works.")
 
 
 # Go through each Program object and create/update the Works within each program virtual folder
