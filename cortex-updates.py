@@ -865,9 +865,9 @@ def program_works(programs, token):
 	# Initialize the dictionary to store existing works and their status
 	work_status = {}
 
-	# update_list = [program for program in programs if program.id == '10391']
-	# for program in update_list:
-	for program in programs:
+	update_list = [program for program in programs if int(program.season[0:4]) >= 1910]
+	for program in update_list:
+	# for program in programs:
 		
 		# iterate through the Program Works
 		for work in program.program_works:
@@ -941,6 +941,7 @@ def program_works(programs, token):
 			# Fix for potentially missing venues and locations
 			sanitized_venue_names = sanitize_data(program.venue_names)
 			sanitized_locations = sanitize_data(program.location_names)
+			sanitized_sub_events = sanitize_data(program.sub_event_names)
 
 			parameters = (
 				f"Documents.Virtual-Folder.Program-work:Update"
@@ -957,7 +958,7 @@ def program_works(programs, token):
 				f"&NYP.Program-Times++={'|'.join(time for time in program.performance_times if time is not None)}"
 				f"&NYP.Location++={'|'.join(sanitized_locations)}"
 				f"&NYP.Venue++={'|'.join(sanitized_venue_names)}"
-				f"&NYP.Event-Type++={'|'.join(program.sub_event_names)}"
+				f"&NYP.Event-Type++={'|'.join(sanitized_sub_events)}"
 			)
 			url = f"{baseurl}{datatable}{parameters}&token={token}"
 			api_call(url,'Add metadata to Program Work',work.program_works_id)
