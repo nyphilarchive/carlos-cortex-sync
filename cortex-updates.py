@@ -865,9 +865,9 @@ def program_works(programs, token):
 	# Initialize the dictionary to store existing works and their status
 	work_status = {}
 
-	update_list = [program for program in programs if int(program.season[0:4]) >= 1971]
-	for program in update_list:
-	#for program in programs:
+	# update_list = [program for program in programs if int(program.season[0:4]) >= 1971]
+	# for program in update_list:
+	for program in programs:
 		
 		# iterate through the Program Works
 		for work in program.program_works:
