@@ -41,8 +41,8 @@ carlos_xml_path = os.environ.get('carlos_xml_path', 'default')
 dbtext_xml_path = os.environ.get('dbtext_xml_path', 'default')
 
 # File paths for our source data
-program_xml = f"{carlos_xml_path}/program_updates.xml" #Program Deltas
-# program_xml = f"{carlos_xml_path}/program.xml" #All programs
+# program_xml = f"{carlos_xml_path}/program_updates.xml" #Program Deltas
+program_xml = f"{carlos_xml_path}/program.xml" #All programs
 business_records_xml = f"{dbtext_xml_path}/CTLG1024-1.xml" #BR Deltas
 # business_records_xml = f"{dbtext_xml_path}/CTLG1024-1_full.xml" #ALL BRs
 name_id_mapping_file = f"{dbtext_xml_path}/names-1.csv" #All DBText names
@@ -275,8 +275,15 @@ def load_program_data(file_path):
 		programs = []
 
 		for row_element in root.findall('row'):
-			program = Program(row_element)
-			programs.append(program)
+			# Assuming each 'row' element contains a 'season' child with the season as text
+			season_text = row_element.find('season').text if row_element.find('season') is not None else ''
+			# Convert the season start year to an integer for comparison
+			season_start_year = int(season_text.split('-')[0]) if season_text and '-' in season_text else 0
+
+			# picking our update back up with the 1971-72 season
+			if season_start_year >= 1971:
+				program = Program(row_element)
+				programs.append(program)
 
 		return programs
 
@@ -789,72 +796,72 @@ def add_sources_to_program(token):
 
 
 def create_or_update_works(programs, token):
-    logger.info("Starting creation/update of Works...")
+	logger.info("Starting creation/update of Works...")
 
-    # Enhanced to store both existence and update status
-    work_status = {}  # Example format: {works_id: {'exists': True, 'updated': False}}
+	# Enhanced to store both existence and update status
+	work_status = {}  # Example format: {works_id: {'exists': True, 'updated': False}}
 
-    for program in programs:
-        for work in program.program_works:
-            # Initialize update_needed as False
-            update_needed = False
+	for program in programs:
+		for work in program.program_works:
+			# Initialize update_needed as False
+			update_needed = False
 
-            # Check if the work already exists and has been updated
-            if work.works_id in work_status:
-                exists = work_status[work.works_id]['exists']
-                updated = work_status[work.works_id]['updated']
-                logger.info(f'Work {work.works_id} status found in local cache: {"exists" if exists else "does not exist"}, {"updated" if updated else "not updated"}')
-                if not updated:  # Only proceed if the work has not been updated already
-                    update_needed = True
-            else:
-                # Assume work needs to be checked (and potentially updated)
-                update_needed = True
+			# Check if the work already exists and has been updated
+			if work.works_id in work_status:
+				exists = work_status[work.works_id]['exists']
+				updated = work_status[work.works_id]['updated']
+				logger.info(f'Work {work.works_id} status found in local cache: {"exists" if exists else "does not exist"}, {"updated" if updated else "not updated"}')
+				if not updated:  # Only proceed if the work has not been updated already
+					update_needed = True
+			else:
+				# Assume work needs to be checked (and potentially updated)
+				update_needed = True
 
-            if update_needed:
-                parameters = f'CoreField.Legacy-Identifier:WORK_{work.works_id} DocSubType:Work&format=json'
-                query = f'{baseurl}/API/search/v3.0/search?query={parameters}&token={token}'
-                try:
-                    r = requests.get(query)
-                    r_data = r.json()
+			if update_needed:
+				parameters = f'CoreField.Legacy-Identifier:WORK_{work.works_id} DocSubType:Work&format=json'
+				query = f'{baseurl}/API/search/v3.0/search?query={parameters}&token={token}'
+				try:
+					r = requests.get(query)
+					r_data = r.json()
 
-                    if r_data['APIResponse']['GlobalInfo']['TotalCount'] == 1:
-                        exists = True
-                        logger.info('Work exists in Cortex')
-                    else:
-                        exists = False
-                        logger.info('This looks like a new work so let\'s add it to Cortex')
-                        
-                    # Update the work_status dictionary with existence and updated status
-                    work_status[work.works_id] = {'exists': exists, 'updated': False}
+					if r_data['APIResponse']['GlobalInfo']['TotalCount'] == 1:
+						exists = True
+						logger.info('Work exists in Cortex')
+					else:
+						exists = False
+						logger.info('This looks like a new work so let\'s add it to Cortex')
+						
+					# Update the work_status dictionary with existence and updated status
+					work_status[work.works_id] = {'exists': exists, 'updated': False}
 
-                except Exception as e:
-                    logger.warning(f'Unable to find Program ID {program.program_id}. Exception: {e}')
-                    # Assume work does not exist and hasn't been updated
-                    work_status[work.works_id] = {'exists': False, 'updated': False}
-                    exists = False
+				except Exception as e:
+					logger.warning(f'Unable to find Program ID {program.program_id}. Exception: {e}')
+					# Assume work does not exist and hasn't been updated
+					work_status[work.works_id] = {'exists': False, 'updated': False}
+					exists = False
 
-            # Check if we should assign a parent folder
-            assign_parent = ''
-            if not exists or not work_status[work.works_id]['updated']:
-                assign_parent = f'&CoreField.Parent-folder:=[Documents.All:CoreField.Identifier={WORK_PARENT_FOLDER_IDENTIFIER}]'
+			# Check if we should assign a parent folder
+			assign_parent = ''
+			if not exists or not work_status[work.works_id]['updated']:
+				assign_parent = f'&CoreField.Parent-folder:=[Documents.All:CoreField.Identifier={WORK_PARENT_FOLDER_IDENTIFIER}]'
 
-                # Create or update the work in Cortex
-                parameters = (
-                    f"Documents.Virtual-folder.Work:CreateOrUpdate"
-                    f"?CoreField.Legacy-Identifier=WORK_{work.works_id}"
-                    f"&NYP.Works-ID:={work.works_id}"
-                    f"&CoreField.Title:={work.composer_name} / {replace_chars(work.title_short)}"
-                    f"{assign_parent}"
-                    f"&NYP.Work-Title-Full:={replace_chars(work.title_full)}"
-                    f"&NYP.Work-Title-Short:={replace_chars(work.title_short)}"
-                )
-                url = f"{baseurl}{datatable}{parameters}&token={token}"
-                api_call(url,'Update the Work',work.works_id)
+				# Create or update the work in Cortex
+				parameters = (
+					f"Documents.Virtual-folder.Work:CreateOrUpdate"
+					f"?CoreField.Legacy-Identifier=WORK_{work.works_id}"
+					f"&NYP.Works-ID:={work.works_id}"
+					f"&CoreField.Title:={work.composer_name} / {replace_chars(work.title_short)}"
+					f"{assign_parent}"
+					f"&NYP.Work-Title-Full:={replace_chars(work.title_full)}"
+					f"&NYP.Work-Title-Short:={replace_chars(work.title_short)}"
+				)
+				url = f"{baseurl}{datatable}{parameters}&token={token}"
+				api_call(url,'Update the Work',work.works_id)
 
-                # Mark the work as updated to avoid redundant updates
-                work_status[work.works_id]['updated'] = True
+				# Mark the work as updated to avoid redundant updates
+				work_status[work.works_id]['updated'] = True
 
-    logger.info("Finished creation/update of Works.")
+	logger.info("Finished creation/update of Works.")
 
 
 # Go through each Program object and create/update the Works within each program virtual folder
@@ -1757,16 +1764,16 @@ def main():
 
 		programs = load_program_data(program_xml) # right now we only need to load this data for the program_works function, but we'll eventually update the other functions to use Program objects, so we'll keep this function separate
 
-		make_folders(token)
-		update_folders(token)
-		create_sources(token)
-		add_sources_to_program(token)
-		update_program_visibility(token)
-		library_updates(token)
-		create_or_update_works(programs, token)
+		# make_folders(token)
+		# update_folders(token)
+		# create_sources(token)
+		# add_sources_to_program(token)
+		# update_program_visibility(token)
+		# library_updates(token)
+		# create_or_update_works(programs, token)
 		program_works(programs, token)
-		concert_programs(programs, token)
-		update_business_records(token, business_records_xml, name_id_mapping_file)
+		# concert_programs(programs, token)
+		# update_business_records(token, business_records_xml, name_id_mapping_file)
 
 		logger.info('ALL DONE! Bye bye :)')
 
