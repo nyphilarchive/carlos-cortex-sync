@@ -882,7 +882,7 @@ def program_works(programs, token):
 
 			# add movement to the title if there is one
 			if work.movement:
-				movement = f' / {work.movement}'
+				movement = f' / {replace_chars(work.movement)}'
 			else:
 				movement = ''
 
