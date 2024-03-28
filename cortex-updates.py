@@ -948,7 +948,7 @@ def program_works(programs, token):
 				f"?CoreField.Legacy-Identifier={work.program_works_id}"
 				f"&NYP.Composer/Work++={replace_chars(work.composer_title_short)}"
 				f"&NYP.Composer/Work-Full-Title:={work.composer_name} / {replace_chars(work.title_full)}"
-				f"&NYP.Movement:={work.movement}"
+				f"&NYP.Movement:={movement}"
 				f"&NYP.Encore:={encore}"
 				f"&NYP.Season+={program.season}"
 				f"&NYP.Orchestra:={program.orchestra_name}"
