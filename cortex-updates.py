@@ -918,7 +918,7 @@ def program_works(programs, token):
 				f"&CoreField.Parent-folder:=[Documents.Virtual-folder.Program:CoreField.Legacy-identifier={program.id}]"
 				f"&NYP.Program-ID:={program.id}"
 				f"&NYP.Composer/Work--=&NYP.Conductor--=&NYP.Composer--=&NYP.Soloist--="
-				f"&NYP.Season--=&NYP.Program-Dates--=&NYP.Program-Date(s)--=&NYP.Program-Times--=&NYP.Location--=&NYP.Venue--=&NYP.Event-Type--="
+				f"&NYP.Season--=&NYP.Program-Dates--=&NYP.Program-Date(s)--=&NYP.Location--=&NYP.Venue--=&NYP.Event-Type--="
 				f"&CoreField.visibility-class:={visibility}"
 			)
 			url = f"{baseurl}{datatable}{parameters}&token={token}"
