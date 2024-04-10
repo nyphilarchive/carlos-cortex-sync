@@ -286,6 +286,18 @@ def load_program_data(file_path):
 			os.remove(temp_file_path)
 
 
+def fetch_existing_record(legacy_id, asset_type, asset_subtype, token):
+    url = f"https://cortex.nyphil.org/API/DataTable/v2.2/Documents.{asset_type}.{asset_subtype}:Read?CoreField.Legacy-Identifier={legacy_id}&format=json&token={token}"
+    response = requests.get(url)
+    if response.status_code == 200:
+        data = response.json()
+        if data["ResponseSummary"]["TotalItemCount"] > 0:
+            return data["Response"][0]
+    else:
+        logger.error(f"Failed to fetch existing record for {legacy_id}: {response.status_code}")
+    return None
+
+
 # Set up our Business Records class
 class BusinessRecord:
 	def __init__(self, record_element, namespace, name_id_mapping):
@@ -943,25 +955,30 @@ def program_works(programs, token):
 			sanitized_locations = sanitize_data(program.location_names)
 			sanitized_sub_events = sanitize_data(program.sub_event_names)
 
-			parameters = (
-				f"Documents.Virtual-Folder.Program-work:Update"
-				f"?CoreField.Legacy-Identifier={work.program_works_id}"
-				f"&NYP.Composer/Work++={replace_chars(work.composer_title_short)}"
-				f"&NYP.Composer/Work-Full-Title:={work.composer_name} / {replace_chars(work.title_full)}"
-				f"&NYP.Movement:={movement}"
-				f"&NYP.Encore:={encore}"
-				f"&NYP.Season+={program.season}"
-				f"&NYP.Orchestra:={program.orchestra_name}"
-				f"&NYP.Program-Dates+={'|'.join(program.combined_datetimes)}"
-				f"&NYP.Program-Date(s)++={'|'.join(program.dates)}"
-				f"&NYP.Program-Date-Range:={program.date_range}"
-				f"&NYP.Program-Times++={'|'.join(time for time in program.performance_times if time is not None)}"
-				f"&NYP.Location++={'|'.join(sanitized_locations)}"
-				f"&NYP.Venue++={'|'.join(sanitized_venue_names)}"
-				f"&NYP.Event-Type++={'|'.join(sanitized_sub_events)}"
-			)
-			url = f"{baseurl}{datatable}{parameters}&token={token}"
-			api_call(url,'Add metadata to Program Work',work.program_works_id)
+			# Send this data as a JSON payload because it might exceed the character limit for a regular API call
+			data = {
+			    'CoreField.Legacy-Identifier': work.program_works_id,
+			    'NYP.Composer/Work++': replace_chars(work.composer_title_short),
+			    'NYP.Composer/Work-Full-Title:': f"{work.composer_name} / {replace_chars(work.title_full)}",
+			    'NYP.Movement:': movement,
+			    'NYP.Encore:': encore,
+			    'NYP.Season+': program.season,
+			    'NYP.Orchestra:': program.orchestra_name,
+			    'NYP.Program-Dates+': '|'.join(program.combined_datetimes),
+			    'NYP.Program-Date(s)++': '|'.join(program.dates),
+			    'NYP.Program-Date-Range:': program.date_range,
+			    'NYP.Location++': '|'.join(sanitized_locations),
+			    'NYP.Venue++': '|'.join(sanitized_venue_names),
+			    'NYP.Event-Type++': '|'.join(sanitized_sub_events)
+			}
+			# fix for linebreaks and such - dump to string and load back to JSON
+			data = json.dumps(data)
+			data = json.loads(data)
+
+			action = 'Documents.Virtual-Folder.Program-work:Update'
+			params = {'token': token}
+			url = f"{baseurl}{datatable}{action}"
+			api_call(url,'Add metadata to Program Work',work.program_works_id, params, data)
 
 			# link the composer to the program work
 			parameters = (
