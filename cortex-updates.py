@@ -1798,7 +1798,7 @@ def main():
 		logger.info(f'We have a token: {token} Proceeding...')
 		print(f'Your token is: {token}')
 
-		programs = load_program_data(program_xml, start_year=1931) # right now we only need to load this data for the program_works function, but we'll eventually update the other functions to use Program objects, so we'll keep this function separate
+		programs = load_program_data(program_xml, start_year=1930) # right now we only need to load this data for the program_works function, but we'll eventually update the other functions to use Program objects, so we'll keep this function separate
 
 		# make_folders(token)
 		# update_folders(token)
