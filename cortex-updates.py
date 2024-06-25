@@ -258,8 +258,18 @@ class Program:
 
 		return combined_datetimes
 
+def parse_year(row_element):
+	# Extract the year from the season element
+	season_element = row_element.find('season')
+	if season_element is not None and season_element.text:
+		try:
+			year = int(season_element.text.split('-')[0])
+			return year
+		except ValueError:
+			pass
+	return None
 
-def load_program_data(file_path):
+def load_program_data(file_path, start_year=None):
 	try:
 		# Open the XML file and read its content
 		with open(file_path, 'r', encoding='utf-8', errors='replace') as file:
@@ -275,8 +285,12 @@ def load_program_data(file_path):
 		programs = []
 
 		for row_element in root.findall('row'):
-			program = Program(row_element)
-			programs.append(program)
+			# Extract the year from the row_element
+			year = parse_year(row_element)
+			# Check if the year meets the criteria
+			if start_year is None or (year is not None and year >= start_year):
+				program = Program(row_element)
+				programs.append(program)
 
 		return programs
 
@@ -284,7 +298,6 @@ def load_program_data(file_path):
 		# Clean up: remove the temporary file
 		if temp_file_path:
 			os.remove(temp_file_path)
-
 
 def fetch_existing_record(legacy_id, asset_type, asset_subtype, token):
     url = f"https://cortex.nyphil.org/API/DataTable/v2.2/Documents.{asset_type}.{asset_subtype}:Read?CoreField.Legacy-Identifier={legacy_id}&format=json&token={token}"
@@ -1785,7 +1798,7 @@ def main():
 		logger.info(f'We have a token: {token} Proceeding...')
 		print(f'Your token is: {token}')
 
-		programs = load_program_data(program_xml) # right now we only need to load this data for the program_works function, but we'll eventually update the other functions to use Program objects, so we'll keep this function separate
+		programs = load_program_data(program_xml, start_year=1931) # right now we only need to load this data for the program_works function, but we'll eventually update the other functions to use Program objects, so we'll keep this function separate
 
 		# make_folders(token)
 		# update_folders(token)
