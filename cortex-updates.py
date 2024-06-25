@@ -1304,6 +1304,7 @@ def library_updates(token):
 						'CoreField.parent-folder:': f'[Documents.Folder.Printed-Music:CoreField.Legacy-Identifier=PM_{legacy_id}]',
 						'CoreField.Import-Field-Mapping-Template:': PAGE_IMPORT_MAPPING_TEMPLATE,
 						'CoreField.Title:': f'MP_{part_id} - {part_type_desc[index]}',
+						'NYP.Part-ID:': part_id,
 						'NYP.Publisher+:': publisher_name,
 						'NYP.Edition-Type+:': part_edition_type[index],
 						'CoreField.Notes:': part_stand_notes[index],
@@ -1571,7 +1572,7 @@ def update_business_records(token, filepath, name_id_mapping_file):
 					logger.error(f"We got more than one result for that Box number... Something is wrong.")
 
 		"""
-		See if this folder already exists in Cortex and what the parent folder is
+		See if this folder already exists in Cortex, get the parent folder and the visibility
 		If the folder exists and the existing parent is correct, we can skip that parameter in the API call
 		This will prevent Cortex from changing the manual order of the BR within the Box folder
 		"""
@@ -1588,9 +1589,11 @@ def update_business_records(token, filepath, name_id_mapping_file):
 			if r_data["APIResponse"]["GlobalInfo"]["TotalCount"] == 1:
 				# We got one result, which is good
 				existing_parent_id = r_data["APIResponse"]["Items"][0]["Document.LineageParentName"]
+				existing_visibility = r_data["APIResponse"]["Items"][0][]
 			else:
 				# We have no result, or more than one parent, so we'll assign the parent as usual
 				existing_parent_id = ""
+				existing_visibility = ""
 		else:
 			existing_parent_id = ""
 			logger.warning(f"Unable to find Business Record {record.folder_number}")
