@@ -907,7 +907,7 @@ def program_works(programs, token):
 
 			# add encore to the title if it is one
 			if work.works_encore == 'Y':
-				title_encore = '(Encore)'
+				title_encore = ' (Encore)'
 			else:
 				title_encore = ''
 
