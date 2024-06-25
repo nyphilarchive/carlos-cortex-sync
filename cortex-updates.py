@@ -41,8 +41,8 @@ carlos_xml_path = os.environ.get('carlos_xml_path', 'default')
 dbtext_xml_path = os.environ.get('dbtext_xml_path', 'default')
 
 # File paths for our source data
-program_xml = f"{carlos_xml_path}/program_updates.xml" #Program Deltas including future programs
-# program_xml = f"{carlos_xml_path}/program.xml" #All programs
+# program_xml = f"{carlos_xml_path}/program_updates.xml" #Program Deltas including future programs
+program_xml = f"{carlos_xml_path}/program.xml" #All programs
 business_records_xml = f"{dbtext_xml_path}/CTLG1024-1.xml" #BR Deltas
 # business_records_xml = f"{dbtext_xml_path}/CTLG1024-1_full.xml" #ALL BRs
 name_id_mapping_file = f"{dbtext_xml_path}/names-1.csv" #All DBText names
@@ -1787,16 +1787,16 @@ def main():
 
 		programs = load_program_data(program_xml) # right now we only need to load this data for the program_works function, but we'll eventually update the other functions to use Program objects, so we'll keep this function separate
 
-		make_folders(token)
-		update_folders(token)
-		create_sources(token)
-		add_sources_to_program(token)
-		update_program_visibility(token)
-		library_updates(token)
-		create_or_update_works(programs, token)
-		# program_works(programs, token)
-		concert_programs(programs, token)
-		update_business_records(token, business_records_xml, name_id_mapping_file)
+		# make_folders(token)
+		# update_folders(token)
+		# create_sources(token)
+		# add_sources_to_program(token)
+		# update_program_visibility(token)
+		# library_updates(token)
+		# create_or_update_works(programs, token)
+		program_works(programs, token)
+		# concert_programs(programs, token)
+		# update_business_records(token, business_records_xml, name_id_mapping_file)
 
 		logger.info('ALL DONE! Bye bye :)')
 
