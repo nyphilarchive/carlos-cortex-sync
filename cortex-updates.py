@@ -41,7 +41,7 @@ carlos_xml_path = os.environ.get('carlos_xml_path', 'default')
 dbtext_xml_path = os.environ.get('dbtext_xml_path', 'default')
 
 # File paths for our source data
-program_xml = f"{carlos_xml_path}/program_updates.xml" #Program Deltas
+program_xml = f"{carlos_xml_path}/program_updates.xml" #Program Deltas including future programs
 # program_xml = f"{carlos_xml_path}/program.xml" #All programs
 business_records_xml = f"{dbtext_xml_path}/CTLG1024-1.xml" #BR Deltas
 # business_records_xml = f"{dbtext_xml_path}/CTLG1024-1_full.xml" #ALL BRs
@@ -871,32 +871,32 @@ def create_or_update_works(programs, token):
 
 # Go through each Program object and create/update the Works within each program virtual folder
 def program_works(programs, token):
-
 	logger.info("Starting Program Works updates...")
-
 	# Initialize the dictionary to store existing works and their status
 	work_status = {}
+	# Dictionary to store soloist RecordID lookups
+	soloist_record_id_lookup = {}
 
-	# update_list = [program for program in programs if int(program.season[0:4]) >= 1971]
-	# for program in update_list:
 	for program in programs:
-		
 		# iterate through the Program Works
 		for work in program.program_works:
-
 			for attr, value in vars(program).items():
 				print(f"{attr}: {value}")
-
 			for attr, value in vars(work).items():
 				print(f"{attr}: {value}")
 
 			# clear old values, give the program work a title, and situate it within a Program
-
 			# add movement to the title if there is one
 			if work.movement:
 				movement = f' / {replace_chars(work.movement)}'
 			else:
 				movement = ''
+
+			# add encore to the title if it is one
+			if work.works_encore == 'Y':
+				title_encore = '(Encore)'
+			else:
+				title_encore = ''
 
 			# set the visibility based on whether the event is past or future
 			if datetime.datetime.strptime(program.dates[0], '%m/%d/%Y').date() < datetime.datetime.now().date():
@@ -905,7 +905,7 @@ def program_works(programs, token):
 				visibility = "Pending"
 
 			# set the title field
-			title = f"{work.composer_name} / {replace_chars(work.title_short)}{movement}"
+			title = f"{work.composer_name} / {replace_chars(work.title_short)}{movement}{title_encore}"
 			# Truncate to 200 characters if necessary
 			title = title[:200]
 			if title.endswith(', / .'):
@@ -922,7 +922,7 @@ def program_works(programs, token):
 				f"&CoreField.visibility-class:={visibility}"
 			)
 			url = f"{baseurl}{datatable}{parameters}&token={token}"
-			api_call(url,'Establish Program Work',work.program_works_id)
+			api_call(url, 'Establish Program Work', work.program_works_id)
 
 			# link Work to Program Work
 			parameters = (
@@ -931,7 +931,7 @@ def program_works(programs, token):
 				f"&NYP.Composer-/-Work+=[Documents.Virtual-folder.Work:CoreField.Legacy-identifier=WORK_{work.works_id}]"
 			)
 			url = f"{baseurl}{datatable}{parameters}&token={token}"
-			api_call(url,f'Link Work {work.works_id} to Program Work',work.program_works_id)
+			api_call(url, f'Link Work {work.works_id} to Program Work', work.program_works_id)
 
 			# link Work to parent Program
 			parameters = (
@@ -940,7 +940,7 @@ def program_works(programs, token):
 				f"&NYP.Composer-/-Work+=[Documents.Virtual-folder.Work:CoreField.Legacy-identifier=WORK_{work.works_id}]"
 			)
 			url = f"{baseurl}{datatable}{parameters}&token={token}"
-			api_call(url,f'Link Work {work.works_id} to Program',program.id)
+			api_call(url, f'Link Work {work.works_id} to Program', program.id)
 
 			# add metadata to each program work
 
@@ -957,19 +957,19 @@ def program_works(programs, token):
 
 			# Send this data as a JSON payload because it might exceed the character limit for a regular API call
 			data = {
-			    'CoreField.Legacy-Identifier': work.program_works_id,
-			    'NYP.Composer/Work++': replace_chars(work.composer_title_short),
-			    'NYP.Composer/Work-Full-Title:': f"{work.composer_name} / {replace_chars(work.title_full)}",
-			    'NYP.Movement:': movement,
-			    'NYP.Encore:': encore,
-			    'NYP.Season+': program.season,
-			    'NYP.Orchestra:': program.orchestra_name,
-			    'NYP.Program-Dates+': '|'.join(program.combined_datetimes),
-			    'NYP.Program-Date(s)++': '|'.join(program.dates),
-			    'NYP.Program-Date-Range:': program.date_range,
-			    'NYP.Location++': '|'.join(sanitized_locations),
-			    'NYP.Venue++': '|'.join(sanitized_venue_names),
-			    'NYP.Event-Type++': '|'.join(sanitized_sub_events)
+				'CoreField.Legacy-Identifier': work.program_works_id,
+				'NYP.Composer/Work++': replace_chars(work.composer_title_short),
+				'NYP.Composer/Work-Full-Title:': f"{work.composer_name} / {replace_chars(work.title_full)}",
+				'NYP.Movement:': work.movement,
+				'NYP.Encore:': encore,
+				'NYP.Season+': program.season,
+				'NYP.Orchestra:': program.orchestra_name,
+				'NYP.Program-Dates+': '|'.join(program.combined_datetimes),
+				'NYP.Program-Date(s)++': '|'.join(program.dates),
+				'NYP.Program-Date-Range:': program.date_range,
+				'NYP.Location++': '|'.join(sanitized_locations),
+				'NYP.Venue++': '|'.join(sanitized_venue_names),
+				'NYP.Event-Type++': '|'.join(sanitized_sub_events)
 			}
 			# fix for linebreaks and such - dump to string and load back to JSON
 			data = json.dumps(data)
@@ -978,7 +978,7 @@ def program_works(programs, token):
 			action = 'Documents.Virtual-Folder.Program-work:Update'
 			params = {'token': token}
 			url = f"{baseurl}{datatable}{action}"
-			api_call(url,'Add metadata to Program Work',work.program_works_id, params, data)
+			api_call(url, 'Add metadata to Program Work', work.program_works_id, params, data)
 
 			# link the composer to the program work
 			parameters = (
@@ -987,7 +987,7 @@ def program_works(programs, token):
 				f"&NYP.Composer+=[Contacts.Source.Default:CoreField.Composer-ID={work.composer_number}]"
 			)
 			url = f"{baseurl}{datatable}{parameters}&token={token}"
-			api_call(url,f'Link Composer {work.composer_number} to Program Work',work.program_works_id)
+			api_call(url, f'Link Composer {work.composer_number} to Program Work', work.program_works_id)
 
 			# link the soloists (semi-colon separated values)
 			if work.works_soloists_ids is not None:
@@ -1001,35 +1001,48 @@ def program_works(programs, token):
 					api_call(url, f'Link Soloist {soloist} to Program Work', work.program_works_id)
 
 			# add paired-value field for soloist/instrument: https://link.orangelogic.com/CMS4/LMS/Home/Published-Documentation/API/Update-a-Paired-Value-Field-Using-the-CreateOrUpdate-API/
-			for name, inst, role in zip(
-				work.works_soloists_names.split(';') if work.works_soloists_names else [''], 
-				work.works_soloists_inst_names.split(';') if work.works_soloists_inst_names else [''], 
-				work.works_soloists_functions.split(';') if work.works_soloists_functions else ['']
+			for soloist_id, inst in zip(
+				work.works_soloists_ids.split(';') if work.works_soloists_ids else [''],
+				work.works_soloists_inst_names.split(';') if work.works_soloists_inst_names else [''],
 			):
-
 				# Strip the values to remove any extra spaces
-				name, inst, role = name.strip(), inst.strip(), role.strip()
+				soloist_id, inst = soloist_id.strip(), inst.strip()
 
 				# Only log a warning if at least one value is non-empty
-				if any([name, inst, role]):
-					if not name:
-						logger.warning(f"Null or blank value for name in Program Work ID {work.program_works_id}")
+				if any([soloist_id, inst]):
+					if not soloist_id:
+						logger.warning(f"Null or blank value for soloist ID in Program Work ID {work.program_works_id}")
+						soloist_id = '5791' # Carlos value for "Unknown Soloist"
 					if not inst:
 						logger.warning(f"Null or blank value for instrument in Program Work ID {work.program_works_id}")
-					if not role:
-						logger.warning(f"Null or blank value for role in Program Work ID {work.program_works_id}")
+						inst = 'Undefined'
 
-				# Prepare parameters for the API call
-				soloist_inst = f"{name.strip()} / {inst.strip()}"
-				soloist_role = f"{role.strip().replace('S','Soloist').replace('A','Assisting Artist')}"
+					# Check if the soloist ID is already in the lookup dictionary
+					if soloist_id not in soloist_record_id_lookup:
+						# Perform the lookup API call
+						lookup_url = f"https://cortex.nyphil.org/api/dataTable/v2.2/Contacts.Source.Default:Read?CoreField.Artist-ID={soloist_id}&format=json&token={token}"
+						response = api_call(lookup_url, 'Lookup Soloist RecordID', soloist_id)
 
-				parameters = (
-					f"Documents.Virtual-Folder.Program-work:Update"
-					f"?CoreField.Legacy-Identifier={work.program_works_id}"
-					f"&NYP.Soloist-/-Instrument-/-Role++={soloist_inst}{{'LinkedKeyword':'{soloist_role}'}}"
-				)
-				url = f"{baseurl}{datatable}{parameters}&token={token}"
-				api_call(url, 'Add soloist and role to Program Work', work.program_works_id)
+						# Extract the RecordID from the response
+						if response:
+							response_data = response.json()
+							try:
+								record_id = response_data['Response'][0].get('RecordID')
+								soloist_record_id_lookup[soloist_id] = record_id
+							except (IndexError, KeyError, TypeError):
+								logger.error(f"Failed to retrieve RecordID for soloist ID {soloist_id}")
+								record_id = None
+
+					# Prepare parameters for the API call only if RecordID was successfully retrieved
+					record_id = soloist_record_id_lookup.get(soloist_id)
+					if record_id:
+						parameters = (
+							f"Documents.Virtual-Folder.Program-work:Update"
+							f"?CoreField.Legacy-Identifier={work.program_works_id}"
+							f"&NYP.Soloist-/-Role++={inst}{{'LinkedField':'{record_id}'}}"
+						)
+						url = f"{baseurl}{datatable}{parameters}&token={token}"
+						api_call(url, 'Add soloist and role to Program Work', work.program_works_id)
 
 			# link the conductors
 			if work.works_conductor_ids is not None:
@@ -1040,7 +1053,7 @@ def program_works(programs, token):
 						f"&NYP.Conductor+=[Contacts.Source.Default:CoreField.Artist-ID={conductor.strip()}]"
 					)
 					url = f"{baseurl}{datatable}{parameters}&token={token}"
-					api_call(url,f'Link Conductor {conductor} to Program Work',work.program_works_id)
+					api_call(url, f'Link Conductor {conductor} to Program Work', work.program_works_id)
 
 	logger.info("All done with Program Works")
 
@@ -1781,7 +1794,7 @@ def main():
 		update_program_visibility(token)
 		library_updates(token)
 		create_or_update_works(programs, token)
-		program_works(programs, token)
+		# program_works(programs, token)
 		concert_programs(programs, token)
 		update_business_records(token, business_records_xml, name_id_mapping_file)
 
