@@ -258,18 +258,19 @@ class Program:
 
 		return combined_datetimes
 
-def parse_year(row_element):
-	# Extract the year from the season element
-	season_element = row_element.find('season')
-	if season_element is not None and season_element.text:
+def parse_date(row_element):
+	# Extract the date from the date element
+	date_element = row_element.find('date')
+	if date_element is not None and date_element.text:
 		try:
-			year = int(season_element.text.split('-')[0])
-			return year
+			# Assuming the date is in MM/DD/YYYY format
+			date = datetime.strptime(date_element.text, '%m/%d/%Y')
+			return date
 		except ValueError:
 			pass
 	return None
 
-def load_program_data(file_path, start_year=None):
+def load_program_data(file_path, start_date=None):
 	try:
 		# Open the XML file and read its content
 		with open(file_path, 'r', encoding='utf-8', errors='replace') as file:
@@ -285,10 +286,10 @@ def load_program_data(file_path, start_year=None):
 		programs = []
 
 		for row_element in root.findall('row'):
-			# Extract the year from the row_element
-			year = parse_year(row_element)
-			# Check if the year meets the criteria
-			if start_year is None or (year is not None and year >= start_year):
+			# Extract the date from the row_element
+			date = parse_date(row_element)
+			# Check if the date meets the criteria
+			if start_date is None or (date is not None and date >= start_date):
 				program = Program(row_element)
 				programs.append(program)
 
@@ -1798,7 +1799,8 @@ def main():
 		logger.info(f'We have a token: {token} Proceeding...')
 		print(f'Your token is: {token}')
 
-		programs = load_program_data(program_xml, start_year=1930) # right now we only need to load this data for the program_works function, but we'll eventually update the other functions to use Program objects, so we'll keep this function separate
+		start_date = datetime(1933, 2, 16)
+		programs = load_program_data(program_xml, start_date=start_date) # right now we only need to load this data for the program_works function, but we'll eventually update the other functions to use Program objects, so we'll keep this function separate
 
 		# make_folders(token)
 		# update_folders(token)
