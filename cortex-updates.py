@@ -1799,7 +1799,7 @@ def main():
 		logger.info(f'We have a token: {token} Proceeding...')
 		print(f'Your token is: {token}')
 
-		start_date = datetime.datetime(1933, 2, 16)
+		start_date = datetime.datetime(1940, 1, 20)
 		programs = load_program_data(program_xml, start_date=start_date) # right now we only need to load this data for the program_works function, but we'll eventually update the other functions to use Program objects, so we'll keep this function separate
 
 		# make_folders(token)
