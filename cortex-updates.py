@@ -1589,11 +1589,11 @@ def update_business_records(token, filepath, name_id_mapping_file):
 			if r_data["APIResponse"]["GlobalInfo"]["TotalCount"] == 1:
 				# We got one result, which is good
 				existing_parent_id = r_data["APIResponse"]["Items"][0]["Document.LineageParentName"]
-				existing_visibility = r_data["APIResponse"]["Items"][0][]
+				# existing_visibility = r_data["APIResponse"]["Items"][0][]
 			else:
 				# We have no result, or more than one parent, so we'll assign the parent as usual
 				existing_parent_id = ""
-				existing_visibility = ""
+				# existing_visibility = ""
 		else:
 			existing_parent_id = ""
 			logger.warning(f"Unable to find Business Record {record.folder_number}")
@@ -1797,7 +1797,7 @@ def main():
 		update_program_visibility(token)
 		library_updates(token)
 		create_or_update_works(programs, token)
-		program_works(programs, token)
+		# program_works(programs, token)
 		concert_programs(programs, token)
 		update_business_records(token, business_records_xml, name_id_mapping_file)
 
