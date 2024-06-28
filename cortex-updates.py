@@ -936,7 +936,7 @@ def program_works(programs, token):
 				f"&CoreField.visibility-class:={visibility}"
 			)
 			url = f"{baseurl}{datatable}{parameters}&token={token}"
-			api_call(url, 'Establish Program Work', work.program_works_id)
+			# api_call(url, 'Establish Program Work', work.program_works_id)
 
 			# link Work to Program Work
 			parameters = (
@@ -945,7 +945,7 @@ def program_works(programs, token):
 				f"&NYP.Composer-/-Work+=[Documents.Virtual-folder.Work:CoreField.Legacy-identifier=WORK_{work.works_id}]"
 			)
 			url = f"{baseurl}{datatable}{parameters}&token={token}"
-			api_call(url, f'Link Work {work.works_id} to Program Work', work.program_works_id)
+			# api_call(url, f'Link Work {work.works_id} to Program Work', work.program_works_id)
 
 			# link Work to parent Program
 			parameters = (
@@ -954,7 +954,7 @@ def program_works(programs, token):
 				f"&NYP.Composer-/-Work+=[Documents.Virtual-folder.Work:CoreField.Legacy-identifier=WORK_{work.works_id}]"
 			)
 			url = f"{baseurl}{datatable}{parameters}&token={token}"
-			api_call(url, f'Link Work {work.works_id} to Program', program.id)
+			# api_call(url, f'Link Work {work.works_id} to Program', program.id)
 
 			# add metadata to each program work
 
@@ -992,7 +992,7 @@ def program_works(programs, token):
 			action = 'Documents.Virtual-Folder.Program-work:Update'
 			params = {'token': token}
 			url = f"{baseurl}{datatable}{action}"
-			api_call(url, 'Add metadata to Program Work', work.program_works_id, params, data)
+			# api_call(url, 'Add metadata to Program Work', work.program_works_id, params, data)
 
 			# link the composer to the program work
 			parameters = (
@@ -1001,7 +1001,7 @@ def program_works(programs, token):
 				f"&NYP.Composer+=[Contacts.Source.Default:CoreField.Composer-ID={work.composer_number}]"
 			)
 			url = f"{baseurl}{datatable}{parameters}&token={token}"
-			api_call(url, f'Link Composer {work.composer_number} to Program Work', work.program_works_id)
+			# api_call(url, f'Link Composer {work.composer_number} to Program Work', work.program_works_id)
 
 			# link the soloists (semi-colon separated values)
 			if work.works_soloists_ids is not None:
@@ -1012,7 +1012,7 @@ def program_works(programs, token):
 						f"&NYP.Soloist+=[Contacts.Source.Default:CoreField.Artist-ID={soloist.strip()}]"
 					)
 					url = f"{baseurl}{datatable}{parameters}&token={token}"
-					api_call(url, f'Link Soloist {soloist} to Program Work', work.program_works_id)
+					# api_call(url, f'Link Soloist {soloist} to Program Work', work.program_works_id)
 
 			# add paired-value field for soloist/instrument: https://link.orangelogic.com/CMS4/LMS/Home/Published-Documentation/API/Update-a-Paired-Value-Field-Using-the-CreateOrUpdate-API/
 			for soloist_id, inst in zip(
@@ -1067,7 +1067,7 @@ def program_works(programs, token):
 						f"&NYP.Conductor+=[Contacts.Source.Default:CoreField.Artist-ID={conductor.strip()}]"
 					)
 					url = f"{baseurl}{datatable}{parameters}&token={token}"
-					api_call(url, f'Link Conductor {conductor} to Program Work', work.program_works_id)
+					# api_call(url, f'Link Conductor {conductor} to Program Work', work.program_works_id)
 
 	logger.info("All done with Program Works")
 
