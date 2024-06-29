@@ -1797,7 +1797,7 @@ def main():
 		update_program_visibility(token)
 		library_updates(token)
 		create_or_update_works(programs, token)
-		# program_works(programs, token)
+		program_works(programs, token)
 		concert_programs(programs, token)
 		update_business_records(token, business_records_xml, name_id_mapping_file)
 
