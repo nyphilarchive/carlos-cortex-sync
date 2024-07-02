@@ -1064,7 +1064,8 @@ def library_updates(token):
 	logger.info("Starting Printed Music updates...")
 
 	# parse the XML file
-	tree = etree.parse(f'{carlos_xml_path}/library_updates.xml')
+	# tree = etree.parse(f'{carlos_xml_path}/library_updates.xml')
+	tree = etree.parse(f'{carlos_xml_path}/library.xml')
 	root = tree.getroot()
 
 	# parse each row in the XML and assign values to variables
@@ -1788,18 +1789,18 @@ def main():
 		logger.info(f'We have a token: {token} Proceeding...')
 		print(f'Your token is: {token}')
 
-		programs = load_program_data(program_xml) # right now we only need to load this data for the program_works function, but we'll eventually update the other functions to use Program objects, so we'll keep this function separate
+		# programs = load_program_data(program_xml) # right now we only need to load this data for the program_works function, but we'll eventually update the other functions to use Program objects, so we'll keep this function separate
 
-		make_folders(token)
-		update_folders(token)
-		create_sources(token)
-		add_sources_to_program(token)
-		update_program_visibility(token)
+		# make_folders(token)
+		# update_folders(token)
+		# create_sources(token)
+		# add_sources_to_program(token)
+		# update_program_visibility(token)
 		library_updates(token)
-		create_or_update_works(programs, token)
-		program_works(programs, token)
-		concert_programs(programs, token)
-		update_business_records(token, business_records_xml, name_id_mapping_file)
+		# create_or_update_works(programs, token)
+		# program_works(programs, token)
+		# concert_programs(programs, token)
+		# update_business_records(token, business_records_xml, name_id_mapping_file)
 
 		logger.info('ALL DONE! Bye bye :)')
 
