@@ -41,8 +41,9 @@ carlos_xml_path = os.environ.get('carlos_xml_path', 'default')
 dbtext_xml_path = os.environ.get('dbtext_xml_path', 'default')
 
 # File paths for our source data
-program_xml = f"{carlos_xml_path}/program_updates.xml" #Program Deltas including future programs
-# program_xml = f"{carlos_xml_path}/program.xml" #All programs
+program_xml = f"{carlos_xml_path}/all_programs_updates.xml" #Program Deltas including future programs
+# program_xml = f"{carlos_xml_path}/all_programs.xml" #All programs including future programs
+# program_xml = f"{carlos_xml_path}/program.xml" #All programs to present
 business_records_xml = f"{dbtext_xml_path}/CTLG1024-1.xml" #BR Deltas
 # business_records_xml = f"{dbtext_xml_path}/CTLG1024-1_full.xml" #ALL BRs
 name_id_mapping_file = f"{dbtext_xml_path}/names-1.csv" #All DBText names
