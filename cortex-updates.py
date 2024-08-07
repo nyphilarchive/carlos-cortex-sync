@@ -41,9 +41,13 @@ carlos_xml_path = os.environ.get('carlos_xml_path', 'default')
 dbtext_xml_path = os.environ.get('dbtext_xml_path', 'default')
 
 # File paths for our source data
-program_xml = f"{carlos_xml_path}/all_programs_updates.xml" #Program Deltas including future programs
-# program_xml = f"{carlos_xml_path}/all_programs.xml" #All programs including future programs
-# program_xml = f"{carlos_xml_path}/program.xml" #All programs to present
+program_xml = [
+	f"{carlos_xml_path}/all_programs_updates.xml", #Program Deltas including future programs
+	f"{carlos_xml_path}/program_updates.xml", #Program Deltas to present
+	#f"{carlos_xml_path}/all_programs.xml", #All programs including future programs
+	#f"{carlos_xml_path}/program.xml" #All programs to present
+	]
+combined_program_xml = f"{carlos_xml_path}/combined_program.xml"
 business_records_xml = f"{dbtext_xml_path}/CTLG1024-1.xml" #BR Deltas
 # business_records_xml = f"{dbtext_xml_path}/CTLG1024-1_full.xml" #ALL BRs
 name_id_mapping_file = f"{dbtext_xml_path}/names-1.csv" #All DBText names
@@ -179,7 +183,8 @@ class Program:
 		self.soloist_function = row_element.find('soloist_function').text
 		self.soloist_instrument = row_element.find('soloist_instrument').text
 		self.program_works = []
-
+		self.element = row_element
+		
 		program_works_ids = row_element.findall('program_works_ids')
 		works_ids = row_element.findall('works_ids')
 		composer_numbers = row_element.findall('composer_number')
@@ -260,31 +265,53 @@ class Program:
 		return combined_datetimes
 
 
-def load_program_data(file_path):
-	try:
-		# Open the XML file and read its content
-		with open(file_path, 'r', encoding='utf-8', errors='replace') as file:
-			xml_data = file.read()
+def load_program_data(file_paths):
+	programs = []
+	for file_path in file_paths:
+		if os.path.isfile(file_path):  # Check if the path is a file
+			temp_file_path = None
+			try:
+				# Open the XML file and read its content
+				with open(file_path, 'r', encoding='utf-8', errors='replace') as file:
+					xml_data = file.read()
 
-		# Create a temporary file to save corrected XML content
-		with tempfile.NamedTemporaryFile(mode='w', delete=False, encoding='utf-8') as temp_file:
-			temp_file.write(xml_data)
-			temp_file_path = temp_file.name
+				# Create a temporary file to save corrected XML content
+				with tempfile.NamedTemporaryFile(mode='w', delete=False, encoding='utf-8') as temp_file:
+					temp_file.write(xml_data)
+					temp_file_path = temp_file.name
 
-		# Parse the XML using the corrected temporary file
-		root = ET.parse(temp_file_path).getroot()
-		programs = []
+				# Parse the XML using the corrected temporary file
+				root = ET.parse(temp_file_path).getroot()
 
-		for row_element in root.findall('row'):
-			program = Program(row_element)
-			programs.append(program)
+				for row_element in root.findall('row'):
+					program = Program(row_element)
+					programs.append(program)
 
-		return programs
+			finally:
+				# Clean up: remove the temporary file
+				if temp_file_path:
+					os.remove(temp_file_path)
+	return programs
 
-	finally:
-		# Clean up: remove the temporary file
-		if temp_file_path:
-			os.remove(temp_file_path)
+
+def combine_xml_files(file_paths, output_file_path):
+	# Load programs from all XML files
+	programs = load_program_data(file_paths)
+
+	# Use a dictionary to keep track of unique programs by ID
+	program_dict = {program.id: program for program in programs}
+
+	# Create the combined XML root
+	root = ET.Element('PROGRAM')
+
+	# Add unique programs to the root element
+	for program in program_dict.values():
+		root.append(program.element)
+
+	# Convert the ElementTree to a string
+	tree = ET.ElementTree(root)
+	with open(output_file_path, 'wb') as file:
+		tree.write(file, encoding='utf-8', xml_declaration=True)
 
 
 def fetch_existing_record(legacy_id, asset_type, asset_subtype, token):
@@ -1789,7 +1816,8 @@ def main():
 		logger.info(f'We have a token: {token} Proceeding...')
 		print(f'Your token is: {token}')
 
-		programs = load_program_data(program_xml) # right now we only need to load this data for the program_works function, but we'll eventually update the other functions to use Program objects, so we'll keep this function separate
+		combine_xml_files(program_xml, combined_program_xml)
+		programs = load_program_data(combined_program_xml) # right now we only need to load this data for the program_works function, but we'll eventually update the other functions to use Program objects, so we'll keep this function separate
 
 		make_folders(token)
 		update_folders(token)
