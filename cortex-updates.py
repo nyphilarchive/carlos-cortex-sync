@@ -42,7 +42,7 @@ dbtext_xml_path = os.environ.get('dbtext_xml_path', 'default')
 
 # File paths for our source data
 program_xml = [
-	f"{carlos_xml_path}/all_programs_updates.xml", #Program Deltas including future programs
+	#f"{carlos_xml_path}/all_programs_updates.xml", #Program Deltas including future programs
 	f"{carlos_xml_path}/program_updates.xml", #Program Deltas to present
 	#f"{carlos_xml_path}/all_programs.xml", #All programs including future programs
 	#f"{carlos_xml_path}/program.xml" #All programs to present
@@ -1817,7 +1817,7 @@ def main():
 		print(f'Your token is: {token}')
 
 		combine_xml_files(program_xml, combined_program_xml)
-		programs = load_program_data(combined_program_xml) # right now we only need to load this data for the program_works function, but we'll eventually update the other functions to use Program objects, so we'll keep this function separate
+		programs = load_program_data([combined_program_xml]) # right now we only need to load this data for the program_works function, but we'll eventually update the other functions to use Program objects, so we'll keep this function separate
 
 		make_folders(token)
 		update_folders(token)
