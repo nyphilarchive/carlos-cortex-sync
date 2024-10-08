@@ -906,19 +906,26 @@ def program_works(programs, token):
 	soloist_record_id_lookup = {}
 
 	# Limit programs being updated by season for testing purposes
-	update_list = []
-	for program in programs:
-		if program.season = "2024-25":
-			update_list.append(program)	
-	for program in update_list:
-	# End testing section. Comment out above and uncomment below for regular updating
+	# update_list = []
 	# for program in programs:
+	# 	if program.season == "2024-25":
+	# 		update_list.append(program)	
+	# for program in update_list:
+	# End testing section. Comment out above and uncomment below for regular updating
+	for program in programs:
+
+		# Establish list to store Program Work IDs from Carlos data so we can compare to what exists in Cortex
+		program_works_ids_carlos = []
+
 		# iterate through the Program Works
 		for work in program.program_works:
 			for attr, value in vars(program).items():
 				print(f"{attr}: {value}")
 			for attr, value in vars(work).items():
 				print(f"{attr}: {value}")
+
+			# Add ID to list for later
+			program_works_ids_carlos.append(work.program_works_id)
 
 			# clear old values, give the program work a title, and situate it within a Program
 			# add movement to the title if there is one
@@ -1091,12 +1098,8 @@ def program_works(programs, token):
 					api_call(url, f'Link Conductor {conductor} to Program Work', work.program_works_id)
 
 		# Done updating individual Program Works
-
-		# Establish list to store Program Work IDs from Carlos data so we can compare to what exists in Cortex
-		if program.program_works_ids is not None:
-			program_works_ids_carlos = program.program_works_ids
 	
-		# Establish list to store Program Work IDs from Cortex
+		# Set up list to store Program Work IDs from Cortex
 		# Read Program virtual folder metadata by legacy ID and get RecordID field
 		lookup_url = f"https://cortex.nyphil.org/API/DataTable/v2.2/Documents.Virtual-Folder.Program:Read?CoreField.Legacy-identifier={program.id}&format=json&token={token}"
 		response = api_call(lookup_url, 'Lookup Program', program.id)
@@ -1114,11 +1117,10 @@ def program_works(programs, token):
 		if record_id:
 			lookup_url = f"https://cortex.nyphil.org/API/PackageExtractor/v1.0/Extract?Package={record_id}&ContentFields=Id_Client&ContentSubtypeFilter=Documents.Virtual-Folder.Program-work&format=json&token={token}"
 			response = api_call(lookup_url, 'Fetch Program Works from Cortex', program.id)
-
 			if response:
 				response_data = response.json()
 				try:
-					program_works_ids_cortex = [item["Id_Client"] for item in response["APIResponse"]["Content"]]
+					program_works_ids_cortex = [item["Id_Client"] for item in response_data["APIResponse"]["Content"]]
 				except (IndexError, KeyError, TypeError):
 					logger.error(f"Failed to retrieve IDs for Program Works in Program {program.id}")
 					program_works_ids_cortex = None	
@@ -1875,16 +1877,16 @@ def main():
 		combine_xml_files(program_xml, combined_program_xml)
 		programs = load_program_data([combined_program_xml]) # right now we only need to load this data for the program_works function, but we'll eventually update the other functions to use Program objects, so we'll keep this function separate
 
-		# make_folders(token)
-		# update_folders(token)
-		# create_sources(token)
-		# add_sources_to_program(token)
-		# update_program_visibility(token)
-		# library_updates(token)
-		# create_or_update_works(programs, token)
+		make_folders(token)
+		update_folders(token)
+		create_sources(token)
+		add_sources_to_program(token)
+		update_program_visibility(token)
+		library_updates(token)
+		create_or_update_works(programs, token)
 		program_works(programs, token)
-		# concert_programs(programs, token)
-		# update_business_records(token, business_records_xml, name_id_mapping_file)
+		concert_programs(programs, token)
+		update_business_records(token, business_records_xml, name_id_mapping_file)
 
 		logger.info('ALL DONE! Bye bye :)')
 
