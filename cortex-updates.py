@@ -905,7 +905,14 @@ def program_works(programs, token):
 	# Dictionary to store soloist RecordID lookups
 	soloist_record_id_lookup = {}
 
+	# Limit programs being updated by season for testing purposes
+	update_list = []
 	for program in programs:
+		if program.season = "2024-25":
+			update_list.append(program)	
+	for program in update_list:
+	# End testing section. Comment out above and uncomment below for regular updating
+	# for program in programs:
 		# iterate through the Program Works
 		for work in program.program_works:
 			for attr, value in vars(program).items():
@@ -1868,16 +1875,16 @@ def main():
 		combine_xml_files(program_xml, combined_program_xml)
 		programs = load_program_data([combined_program_xml]) # right now we only need to load this data for the program_works function, but we'll eventually update the other functions to use Program objects, so we'll keep this function separate
 
-		make_folders(token)
-		update_folders(token)
-		create_sources(token)
-		add_sources_to_program(token)
-		update_program_visibility(token)
-		library_updates(token)
-		create_or_update_works(programs, token)
+		# make_folders(token)
+		# update_folders(token)
+		# create_sources(token)
+		# add_sources_to_program(token)
+		# update_program_visibility(token)
+		# library_updates(token)
+		# create_or_update_works(programs, token)
 		program_works(programs, token)
-		concert_programs(programs, token)
-		update_business_records(token, business_records_xml, name_id_mapping_file)
+		# concert_programs(programs, token)
+		# update_business_records(token, business_records_xml, name_id_mapping_file)
 
 		logger.info('ALL DONE! Bye bye :)')
 
