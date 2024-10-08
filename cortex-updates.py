@@ -1083,6 +1083,55 @@ def program_works(programs, token):
 					url = f"{baseurl}{datatable}{parameters}&token={token}"
 					api_call(url, f'Link Conductor {conductor} to Program Work', work.program_works_id)
 
+		# Done updating individual Program Works
+
+		# Establish list to store Program Work IDs from Carlos data so we can compare to what exists in Cortex
+		if program.program_works_ids is not None:
+			program_works_ids_carlos = program.program_works_ids
+	
+		# Establish list to store Program Work IDs from Cortex
+		# Read Program virtual folder metadata by legacy ID and get RecordID field
+		lookup_url = f"https://cortex.nyphil.org/API/DataTable/v2.2/Documents.Virtual-Folder.Program:Read?CoreField.Legacy-identifier={program.id}&format=json&token={token}"
+		response = api_call(lookup_url, 'Lookup Program', program.id)
+
+		# Extract the RecordID from the response
+		if response:
+			response_data = response.json()
+			try:
+				record_id = response_data['Response'][0].get('RecordID')
+			except (IndexError, KeyError, TypeError):
+				logger.error(f"Failed to retrieve RecordID for Program ID {program.id}")
+				record_id = None
+
+		# Use RecordID with Package Extractor API to get Legacy IDs of Program Works
+		if record_id:
+			lookup_url = f"https://cortex.nyphil.org/API/PackageExtractor/v1.0/Extract?Package={record_id}&ContentFields=Id_Client&ContentSubtypeFilter=Documents.Virtual-Folder.Program-work&format=json&token={token}"
+			response = api_call(lookup_url, 'Fetch Program Works from Cortex', program.id)
+
+			if response:
+				response_data = response.json()
+				try:
+					program_works_ids_cortex = [item["Id_Client"] for item in response["APIResponse"]["Content"]]
+				except (IndexError, KeyError, TypeError):
+					logger.error(f"Failed to retrieve IDs for Program Works in Program {program.id}")
+					program_works_ids_cortex = None	
+
+		# Compare two lists and delete from Cortex if necessary
+		if program_works_ids_carlos and program_works_ids_cortex:
+			# Find the unique IDs in program_works_ids_cortex
+			unique_to_cortex = list(set(program_works_ids_cortex) - set(program_works_ids_carlos))
+
+			if unique_to_cortex:
+				for item in unique_to_cortex:
+					logger.warning(f"Program Work {item} only found in Cortex!")
+					# Delete via API
+					parameters = (
+						f"Documents.Virtual-Folder.Program-work:Delete"
+						f"?CoreField.Legacy-Identifier={item}"
+					)
+					url = f"{baseurl}{datatable}{parameters}&token={token}"
+					api_call(url, f'Delete Program Work {item} from Program ID', program.id)
+
 	logger.info("All done with Program Works")
 
 
